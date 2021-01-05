@@ -1,0 +1,16 @@
+package main
+
+type Type interface {
+	is_Type()
+}
+type Ident string
+
+func (v Ident) is_Type() {}
+
+type FunctionPointer string
+
+func (v FunctionPointer) is_Type() {}
+
+type Struct string
+
+func (v Struct) is_Type() {}

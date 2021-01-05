@@ -1,0 +1,52 @@
+type Kind = int64;
+
+type Identifier = string;
+
+type Type =
+    | Ident of Identifier
+    | FunctionPointer of `struct {
+        Arguments []Type
+        Returns   *Type
+    }`
+    | Struct of `[]struct {
+        Name string
+        Kind Type
+    }`;
+
+type Literal =
+    | Integer of int64;
+
+type Expression =
+    | Lit of Literal
+    | Var of Identifier
+    | Call of `struct {
+        Function  Identifier
+        Arguments []Expression
+    }`
+    | Block of `[]Expression`
+    | If of `struct {
+        Condition Expression
+        Then      Expression
+        Else      Expression
+    }`;
+
+type TopLevel =
+    | Func of `struct {
+        Name Identifier
+        Arguments []struct{
+            Name Identifier
+            Kind Type
+        }
+
+        Returns *Type
+        Expr    Expression
+    }`
+    | Import of string
+    | TypeDeclaration of `struct {
+        Name Identifier
+        Kind Type
+    }`;
+
+type ASTNode =
+    | T of TopLevel
+    | E of Expression;
