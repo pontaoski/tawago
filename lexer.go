@@ -30,8 +30,34 @@ const (
 	THEN
 	ELSE
 	FUNC
+	STRUCT
 	IMPORT
 )
+
+func (t TokenKind) String() string {
+	data := map[TokenKind]string{
+		EOF:      "EOF",
+		ILLEGAL:  "ILLEGAL",
+		COLON:    "COLON",
+		LPAREN:   "LPAREN",
+		RPAREN:   "RPAREN",
+		LBRACKET: "LBRACKET",
+		RBRACKET: "RBRACKET",
+		COMMA:    "COMMA",
+		EQUALS:   "EQUALS",
+		EOS:      "EOS",
+		IDENT:    "IDENT",
+		STRING:   "STRING",
+		TYPE:     "TYPE",
+		IF:       "IF",
+		THEN:     "THEN",
+		ELSE:     "ELSE",
+		FUNC:     "FUNC",
+		STRUCT:   "STRUCT",
+		IMPORT:   "IMPORT",
+	}
+	return data[t]
+}
 
 type Position struct {
 	Line   int
@@ -171,6 +197,44 @@ func (l *Lexer) Peek() (Token, string) {
 	return tok, str
 }
 
+func (l *Lexer) PeekIs(k ...TokenKind) bool {
+	token, _ := l.Peek()
+	for _, kind := range k {
+		if token.Kind == kind {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (l *Lexer) PeekIsWithRet(k ...TokenKind) (bool, Token, string) {
+	token, lit := l.Peek()
+	for _, kind := range k {
+		if token.Kind == kind {
+			return true, token, lit
+		}
+	}
+
+	return false, Token{}, ""
+}
+
+func (l *Lexer) LexExpecting(k ...TokenKind) (Token, string) {
+	token, lit := l.Lex()
+	for _, kind := range k {
+		if token.Kind == kind {
+			return token, lit
+		}
+	}
+
+	panic(ExpectedOneOfKindGotKind{
+		Expected: k,
+		Got:      token.Kind,
+		From:     token.From,
+		To:       token.To,
+	})
+}
+
 func (l *Lexer) Lex() (Token, string) {
 	if l.peeked != nil {
 		defer func() { l.peeked = nil }()
@@ -221,6 +285,7 @@ func (l *Lexer) Lex() (Token, string) {
 			"else":   ELSE,
 			"func":   FUNC,
 			"import": IMPORT,
+			"struct": STRUCT,
 		}
 
 		switch {
