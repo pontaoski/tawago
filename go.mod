@@ -4,5 +4,6 @@ go 1.14
 
 require (
 	github.com/alecthomas/repr v0.0.0-20201120212035-bb82daffcca2
+	github.com/llir/llvm v0.3.2
 	github.com/ztrue/tracerr v0.3.0
 )

@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/alecthomas/repr"
@@ -163,9 +164,15 @@ func (p *Parser) parseBlock() Expression {
 }
 
 func (p *Parser) parseExpression() Expression {
-	tok, lit := p.l.LexExpecting(IDENT, IF, LBRACKET)
+	tok, lit := p.l.LexExpecting(IDENT, IF, LBRACKET, INT)
 
 	switch tok.Kind {
+	case INT:
+		parsed, err := strconv.ParseInt(lit, 10, 64)
+		if err != nil {
+			panic(err)
+		}
+		return Lit{Integer(parsed)}
 	case IDENT:
 		if !p.l.PeekIs(LPAREN) {
 			return Var(lit)
@@ -275,8 +282,13 @@ func (p *Parser) parseType() Type {
 
 const wholeProgram = `import ` + "`hi`" + `
 
+func eep() int64 {
+	50
+}
+
 func main() {
-	if toki_pona then toki else hello
+	eep()
+	if 0 then 50 else 30
 }
 `
 
@@ -289,4 +301,5 @@ func main() {
 		os.Exit(1)
 	}
 	repr.Println(p.ast)
+	codegen(p.ast.Toplevels)
 }

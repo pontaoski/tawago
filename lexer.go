@@ -23,6 +23,8 @@ const (
 
 	EOS
 
+	INT
+
 	IDENT
 	STRING
 
@@ -305,6 +307,25 @@ func (l *Lexer) Lex() (Token, string) {
 		}
 
 		switch {
+		case unicode.IsDigit(r):
+			var runes string
+			runes += string(r)
+			for {
+				r, _, err := l.reader.ReadRune()
+				if err != nil {
+					if err == io.EOF {
+						return l.kinded(INT), runes
+					}
+					panic(err)
+				}
+
+				if !unicode.IsDigit(r) {
+					l.backup()
+					return l.kinded(INT), runes
+				}
+
+				runes += string(r)
+			}
 		case unicode.IsSpace(r):
 			continue
 		case otherChar(r):
