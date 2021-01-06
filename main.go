@@ -23,8 +23,11 @@ func main() {
 						Required: true,
 					},
 					&cli.StringFlag{
-						Name:     "output",
-						Required: true,
+						Name: "output",
+					},
+					&cli.BoolFlag{
+						Name:  "dump",
+						Value: false,
 					},
 				},
 				Action: func(c *cli.Context) error {
@@ -46,6 +49,11 @@ func main() {
 					}
 
 					module := codegen(p.ast.Toplevels).String()
+
+					if c.Bool("dump") {
+						println(module)
+						os.Exit(0)
+					}
 
 					clang, err := exec.LookPath("clang")
 					if err != nil {

@@ -23,8 +23,9 @@ type LLVMType struct {
 }
 
 type ctx struct {
-	names map[Identifier]namedThing
-	entry value.Value
+	names                  map[Identifier]namedThing
+	entry                  value.Value
+	forwardDeclarationPass bool
 }
 
 func codegenExpression(c *ctx, e Expression, b *ir.Block) value.Value {
@@ -117,19 +118,24 @@ func codegenToplevel(c *ctx, t TopLevel, m *ir.Module) {
 			ret = codegenType(c, *tl.Returns)
 		}
 
-		var params []*ir.Param
-		for _, param := range tl.Arguments {
-			params = append(params, ir.NewParam(string(param.Name), codegenType(c, param.Kind)))
+		if c.forwardDeclarationPass {
+			var params []*ir.Param
+			for _, param := range tl.Arguments {
+				params = append(params, ir.NewParam(string(param.Name), codegenType(c, param.Kind)))
+			}
+
+			fn := m.NewFunc(string(tl.Name), ret, params...)
+			c.names[tl.Name] = LLVMValue{Value: fn}
+			return
 		}
 
-		fn := m.NewFunc(string(tl.Name), ret, params...)
+		fn := c.names[tl.Name].(LLVMValue).Value.(*ir.Func)
 		bloc := fn.NewBlock("entry")
 
 		if tl.Name == "main" {
 			c.entry = fn
 		}
 
-		c.names[tl.Name] = LLVMValue{Value: fn}
 		retValue := codegenExpression(c, tl.Expr, bloc)
 
 		if types.IsVoid(ret) {
@@ -171,8 +177,15 @@ func codegen(tls []TopLevel) *ir.Module {
 	}
 
 	modu := ir.NewModule()
+	c.forwardDeclarationPass = true
 	for _, tl := range tls {
 		codegenToplevel(c, tl, modu)
+	}
+	c.forwardDeclarationPass = false
+	for _, tl := range tls {
+		if _, ok := tl.(Func); ok {
+			codegenToplevel(c, tl, modu)
+		}
 	}
 
 	if c.entry != nil {

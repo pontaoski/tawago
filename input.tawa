@@ -1,3 +1,8 @@
 func main() {
+    ohno()
+    nil
+}
+
+func ohno() {
     nil
 }
