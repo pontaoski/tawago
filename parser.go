@@ -1,11 +1,8 @@
 package main
 
 import (
-	"os"
 	"strconv"
-	"strings"
 
-	"github.com/alecthomas/repr"
 	"github.com/ztrue/tracerr"
 )
 
@@ -278,28 +275,4 @@ func (p *Parser) parseType() Type {
 	}
 
 	panic("Unexpected")
-}
-
-const wholeProgram = `import ` + "`hi`" + `
-
-func eep() int64 {
-	50
-}
-
-func main() {
-	eep()
-	if 0 then 50 else 30
-}
-`
-
-func main() {
-	l := NewLexer(strings.NewReader(wholeProgram))
-	p := NewParser(l)
-	err := p.Parse()
-	if err != nil {
-		tracerr.PrintSourceColor(err)
-		os.Exit(1)
-	}
-	repr.Println(p.ast)
-	codegen(p.ast.Toplevels)
 }

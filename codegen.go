@@ -1,8 +1,6 @@
 package main
 
 import (
-	"fmt"
-
 	"github.com/llir/llvm/ir"
 	"github.com/llir/llvm/ir/constant"
 	"github.com/llir/llvm/ir/enum"
@@ -26,6 +24,7 @@ type LLVMType struct {
 
 type ctx struct {
 	names map[Identifier]namedThing
+	entry value.Value
 }
 
 func codegenExpression(c *ctx, e Expression, b *ir.Block) value.Value {
@@ -51,8 +50,6 @@ func codegenExpression(c *ctx, e Expression, b *ir.Block) value.Value {
 		for _, statement := range expr {
 			last = codegenExpression(c, statement, b)
 		}
-
-		b.NewRet(last)
 
 		return last
 	case If:
@@ -128,9 +125,18 @@ func codegenToplevel(c *ctx, t TopLevel, m *ir.Module) {
 		fn := m.NewFunc(string(tl.Name), ret, params...)
 		bloc := fn.NewBlock("entry")
 
+		if tl.Name == "main" {
+			c.entry = fn
+		}
+
 		c.names[tl.Name] = LLVMValue{Value: fn}
 		retValue := codegenExpression(c, tl.Expr, bloc)
-		fn.Blocks[len(fn.Blocks)-1].NewRet(retValue)
+
+		if types.IsVoid(ret) {
+			fn.Blocks[len(fn.Blocks)-1].NewRet(nil)
+		} else {
+			fn.Blocks[len(fn.Blocks)-1].NewRet(retValue)
+		}
 	case TypeDeclaration:
 		c.names[tl.Name] = LLVMType{Type: codegenType(c, tl.Kind)}
 	case Import:
@@ -140,7 +146,7 @@ func codegenToplevel(c *ctx, t TopLevel, m *ir.Module) {
 	}
 }
 
-func codegen(tls []TopLevel) {
+func codegen(tls []TopLevel) *ir.Module {
 	c := &ctx{
 		names: map[Identifier]namedThing{
 			"int8":   LLVMType{Type: types.I8},
@@ -159,6 +165,8 @@ func codegen(tls []TopLevel) {
 
 			"true":  LLVMValue{Value: constant.False},
 			"false": LLVMValue{Value: constant.True},
+
+			"nil": LLVMValue{Value: nil},
 		},
 	}
 
@@ -167,5 +175,14 @@ func codegen(tls []TopLevel) {
 		codegenToplevel(c, tl, modu)
 	}
 
-	fmt.Println(modu)
+	if c.entry != nil {
+		opening := modu.NewFunc("_tawa_main", types.Void)
+		bloc := opening.NewBlock("_entry")
+
+		bloc.NewCall(c.entry)
+		bloc.NewCall(ir.NewInlineAsm(types.NewPointer(types.NewFunc(types.Void)), `movl $$0x1, %eax; movl $$0x1, %ebx; int $$0x80`, ``))
+		bloc.NewRet(nil)
+	}
+
+	return modu
 }

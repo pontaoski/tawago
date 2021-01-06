@@ -2,6 +2,12 @@
 
 The language of motion.
 
-## Features
+```go
+func not(in: bool) bool {
+    if in then false else true
+}
 
-lmao there are none the compiler can barely parse import statements
+func main() {
+    not(false)
+}
+```
