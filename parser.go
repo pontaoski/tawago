@@ -1,9 +1,11 @@
 package main
 
 import (
+	"os"
 	"strings"
 
 	"github.com/alecthomas/repr"
+	"github.com/ztrue/tracerr"
 )
 
 type Parser struct {
@@ -21,7 +23,7 @@ func (p *Parser) Parse() (err error) {
 		if r := recover(); r != nil {
 			rerr, ok := r.(error)
 			if ok {
-				err = rerr
+				err = tracerr.Wrap(rerr)
 			} else {
 				panic(r)
 			}
@@ -43,6 +45,69 @@ func (p *Parser) Parse() (err error) {
 				Name: Identifier(name),
 				Kind: p.parseType(),
 			})
+		case FUNC:
+			_, name := p.l.LexExpecting(IDENT)
+			var arguments []struct {
+				Name Identifier
+				Kind Type
+			}
+
+			p.l.LexExpecting(LPAREN)
+			if !p.l.PeekIs(RPAREN) {
+				for {
+					_, name := p.l.LexExpecting(IDENT)
+					p.l.LexExpecting(COLON)
+					kind := p.parseType()
+
+					arguments = append(arguments, struct {
+						Name Identifier
+						Kind Type
+					}{
+						Name: Identifier(name),
+						Kind: kind,
+					})
+
+					if p.l.PeekIs(COMMA, RPAREN) {
+						if p.l.PeekIs(RPAREN) {
+							break
+						}
+						continue
+					}
+
+					p.l.LexExpecting(COMMA, RPAREN)
+				}
+			}
+			p.l.LexExpecting(RPAREN)
+
+			var ret *Type
+			if p.l.PeekIs(IDENT, FUNC, STRUCT) {
+				t := p.parseType()
+				ret = &t
+			}
+			var expr Expression
+			if !p.l.PeekIs(FATARROW, LBRACKET) {
+				tok, _ := p.l.Peek()
+				panic(ExpectedOneOfKindGotKind{
+					Expected: []TokenKind{FATARROW, LBRACKET},
+					Got:      tok.Kind,
+					From:     tok.From,
+					To:       tok.To,
+				})
+			}
+			if p.l.PeekIs(FATARROW) {
+				p.l.LexExpecting(FATARROW)
+				expr = p.parseExpression()
+			} else {
+				p.l.LexExpecting(LBRACKET)
+				expr = p.parseBlock()
+			}
+			p.ast.Toplevels = append(p.ast.Toplevels, Func{
+				Name:      Identifier(name),
+				Arguments: arguments,
+				Returns:   ret,
+				Expr:      expr,
+			})
+			p.l.LexExpecting(EOS)
 		}
 	}
 }
@@ -63,6 +128,89 @@ func (p *Parser) parseImport() {
 	if tok.Kind != EOS {
 		panic(ExpectedKindGotKind{EOS, tok.Kind, tok.From, tok.To})
 	}
+}
+
+// parseBlock should be called with the parser is past the opening brace
+func (p *Parser) parseBlock() Expression {
+	var statements []Expression
+
+	if !p.l.PeekIs(RBRACKET) {
+		for {
+			if p.l.PeekIs(EOS) {
+				p.l.LexExpecting(EOS)
+				continue
+			}
+
+			statements = append(statements, p.parseExpression())
+
+			if p.l.PeekIs(EOS, RBRACKET) {
+				if p.l.PeekIs(RBRACKET) {
+					break
+				}
+				p.l.LexExpecting(EOS)
+				if p.l.PeekIs(RBRACKET) {
+					break
+				}
+				continue
+			}
+
+			p.l.LexExpecting(EOS, RBRACKET)
+		}
+	}
+	p.l.LexExpecting(RBRACKET)
+
+	return Block(statements)
+}
+
+func (p *Parser) parseExpression() Expression {
+	tok, lit := p.l.LexExpecting(IDENT, IF, LBRACKET)
+
+	switch tok.Kind {
+	case IDENT:
+		if !p.l.PeekIs(LPAREN) {
+			return Var(lit)
+		}
+
+		p.l.LexExpecting(LPAREN)
+		var args []Expression
+
+		if !p.l.PeekIs(RPAREN) {
+			for {
+				args = append(args, p.parseExpression())
+
+				if p.l.PeekIs(COMMA, RPAREN) {
+					if p.l.PeekIs(RPAREN) {
+						break
+					}
+					continue
+				}
+
+				p.l.LexExpecting(COMMA, RPAREN)
+			}
+		}
+		p.l.LexExpecting(RPAREN)
+
+		return Call{
+			Function:  Identifier(lit),
+			Arguments: args,
+		}
+	case IF:
+		cond := p.parseExpression()
+		p.l.LexExpecting(THEN)
+		then := p.parseExpression()
+		p.l.LexExpecting(ELSE)
+		elseExpr := p.parseExpression()
+
+		return If{
+			Condition: cond,
+			Then:      then,
+			Else:      elseExpr,
+		}
+	case LBRACKET:
+		return p.parseBlock()
+	}
+
+	panic("unhandled")
 }
 
 // expected to be called after reading type keyword and name token.
@@ -125,12 +273,20 @@ func (p *Parser) parseType() Type {
 	panic("Unexpected")
 }
 
+const wholeProgram = `import ` + "`hi`" + `
+
 func main() {
-	l := NewLexer(strings.NewReader("import `ok`; type Yeet int; type Yeet func(int) int; type Yeet struct { hi: func(int, struct { nested: int }) int };"))
+	if toki_pona then toki else hello
+}
+`
+
+func main() {
+	l := NewLexer(strings.NewReader(wholeProgram))
 	p := NewParser(l)
 	err := p.Parse()
 	if err != nil {
-		panic(err)
+		tracerr.PrintSourceColor(err)
+		os.Exit(1)
 	}
 	repr.Println(p.ast)
 }

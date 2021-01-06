@@ -19,6 +19,7 @@ const (
 	RBRACKET
 	COMMA
 	EQUALS
+	FATARROW
 
 	EOS
 
@@ -252,6 +253,22 @@ func (l *Lexer) Lex() (Token, string) {
 
 		l.pos.Column++
 
+		switch {
+		case r == '=':
+			byt, err := l.reader.Peek(1)
+			if err != nil && err != io.EOF {
+				panic(err)
+			}
+			if byt[0] == '>' {
+
+				if _, _, err := l.reader.ReadRune(); err != nil {
+					panic(err)
+				}
+				return l.kinded(FATARROW), "=>"
+			}
+			return l.kinded(EQUALS), "="
+		}
+
 		data := map[rune]TokenKind{
 			':': COLON,
 			'(': LPAREN,
@@ -260,7 +277,6 @@ func (l *Lexer) Lex() (Token, string) {
 			'}': RBRACKET,
 			',': COMMA,
 			';': EOS,
-			'=': EQUALS,
 		}
 
 		if kind, ok := data[r]; ok {
