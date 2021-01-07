@@ -81,7 +81,7 @@ func codegenExpression(c *ctx, e Expression, b *ir.Block) value.Value {
 		case LLVMValue:
 			return v.Value
 		case LLVMMutableValue:
-			return b.NewLoad(v.Value.Type(), v.Value)
+			return b.NewLoad(v.Value.Type().(*types.PointerType).ElemType, v.Value)
 		default:
 			panic("unhandled")
 		}
