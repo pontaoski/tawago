@@ -88,8 +88,7 @@ func (p *Parser) Parse() (err error) {
 				panic(ExpectedOneOfKindGotKind{
 					Expected: []TokenKind{FATARROW, LBRACKET},
 					Got:      tok.Kind,
-					From:     tok.From,
-					To:       tok.To,
+					Location: tok.Location,
 				})
 			}
 			if p.l.PeekIs(FATARROW) {
@@ -115,17 +114,9 @@ type AST struct {
 }
 
 func (p *Parser) parseImport() {
-	tok, path := p.l.Lex()
-	if tok.Kind != STRING {
-		panic(ExpectedKindGotKind{STRING, tok.Kind, tok.From, tok.To})
-	}
-
+	_, path := p.l.LexExpecting(STRING)
 	p.ast.Toplevels = append(p.ast.Toplevels, Import(path))
-
-	tok, path = p.l.Lex()
-	if tok.Kind != EOS {
-		panic(ExpectedKindGotKind{EOS, tok.Kind, tok.From, tok.To})
-	}
+	p.l.LexExpecting(EOS)
 }
 
 // parseBlock should be called with the parser is past the opening brace
@@ -181,9 +172,8 @@ func (p *Parser) parseStructLiteral() (r map[string]Expression) {
 
 			if _, ok := r[name]; ok {
 				panic(DuplicateField{
-					Name: name,
-					From: tok.From,
-					To:   tok.To,
+					Name:     name,
+					Location: tok.Location,
 				})
 			}
 
@@ -263,6 +253,7 @@ func (p *Parser) parseExpressionLeaf() Expression {
 			return Assignment{
 				To:    Identifier(lit),
 				Value: p.parseExpression(),
+				Pos:   Span{tok.Location.From, p.l.pos},
 			}
 		} else if p.l.PeekIs(LBRACKET) {
 			return Lit{StructLiteral{

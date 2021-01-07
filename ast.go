@@ -74,6 +74,7 @@ func (v MutDeclaration) is_Expression() {}
 type Assignment struct {
 	To    Identifier
 	Value Expression
+	Pos   Span
 }
 
 func (v Assignment) is_Expression() {}

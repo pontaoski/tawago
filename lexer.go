@@ -78,11 +78,24 @@ type Position struct {
 	Filename string
 }
 
+type Span struct {
+	From Position
+	To   Position
+}
+
 func (p Position) String() string {
 	if p.Filename == "" {
 		p.Filename = "<unknown>"
 	}
 	return fmt.Sprintf("%s:%d:%d", p.Filename, p.Line, p.Column)
+}
+
+func (s Span) String() string {
+	return fmt.Sprintf("%s-%d:%d", s.From, s.To.Line, s.To.Column)
+}
+
+func SingleCharSpan(p Position) Span {
+	return Span{p, p}
 }
 
 type Lexer struct {
@@ -94,9 +107,8 @@ type Lexer struct {
 }
 
 type Token struct {
-	Kind TokenKind
-	From Position
-	To   Position
+	Kind     TokenKind
+	Location Span
 }
 
 func NewLexer(reader io.Reader, filename string) *Lexer {
@@ -127,9 +139,8 @@ func (l *Lexer) backupN(n int) {
 
 func (l *Lexer) kinded(t TokenKind) Token {
 	return Token{
-		From: l.pos,
-		To:   l.pos,
-		Kind: t,
+		Location: SingleCharSpan(l.pos),
+		Kind:     t,
 	}
 }
 
@@ -264,8 +275,7 @@ func (l *Lexer) LexExpecting(k ...TokenKind) (Token, string) {
 	panic(ExpectedOneOfKindGotKind{
 		Expected: k,
 		Got:      token.Kind,
-		From:     token.From,
-		To:       token.To,
+		Location: token.Location,
 	})
 }
 
@@ -277,9 +287,8 @@ func (l *Lexer) Lex() (r Token, s string) {
 	if l.insertNewline {
 		l.insertNewline = false
 		return Token{
-			Kind: EOS,
-			From: l.pos,
-			To:   l.pos,
+			Kind:     EOS,
+			Location: SingleCharSpan(l.pos),
 		}, "\n"
 	}
 
@@ -357,7 +366,7 @@ func (l *Lexer) Lex() (r Token, s string) {
 			l.backup()
 			from, to, lit := l.lexString()
 
-			return Token{STRING, from, to}, lit
+			return Token{STRING, Span{from, to}}, lit
 		}
 
 		keywords := map[string]TokenKind{
@@ -399,10 +408,10 @@ func (l *Lexer) Lex() (r Token, s string) {
 			from, to, lit := l.lexIdent()
 
 			if kind, ok := keywords[lit]; ok {
-				return Token{kind, from, to}, lit
+				return Token{kind, Span{from, to}}, lit
 			}
 
-			return Token{IDENT, from, to}, lit
+			return Token{IDENT, Span{from, to}}, lit
 		}
 
 		panic("unhandled")

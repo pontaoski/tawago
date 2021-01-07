@@ -38,6 +38,7 @@ type Expression =
     | Assignment of `struct {
         To    Identifier
         Value Expression
+        Pos   Span
     }`
     | FieldAssignment of `struct {
         Struct Expression

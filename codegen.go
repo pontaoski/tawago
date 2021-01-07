@@ -1,6 +1,9 @@
 package main
 
 import (
+	"fmt"
+	"os"
+
 	"github.com/llir/llvm/ir"
 	"github.com/llir/llvm/ir/constant"
 	"github.com/llir/llvm/ir/enum"
@@ -25,6 +28,24 @@ type LLVMType struct {
 	NamedThingImpl
 	types.Type
 	fields map[string]int
+}
+
+type uerror interface {
+	UError() string
+}
+type uerrorImpl struct {
+	msg string
+}
+
+func (u uerrorImpl) UError() string {
+	return u.msg
+}
+
+func NewUError(msg string, fmts ...interface{}) uerror {
+	a := uerrorImpl{}
+	a.msg = fmt.Sprintf(msg, fmts...)
+
+	return a
 }
 
 type ctx struct {
@@ -87,7 +108,7 @@ func codegenExpression(c *ctx, e Expression, b *ir.Block) value.Value {
 	case Lit:
 		switch lit := expr.Literal.(type) {
 		case Integer:
-			return constant.NewInt(types.I64, int64(lit))
+			return constant.NewInt(Int64.Type.(*types.IntType), int64(lit))
 		case StructLiteral:
 			t := c.lookup(lit.Name).(LLVMType)
 			st := t.Type.(*types.StructType)
@@ -145,7 +166,23 @@ func codegenExpression(c *ctx, e Expression, b *ir.Block) value.Value {
 		return val
 	case Assignment:
 		val := codegenExpression(c, expr.Value, b)
-		b.NewStore(val, c.lookup(expr.To).(LLVMMutableValue).Value)
+		to, ok := c.lookup(expr.To).(LLVMMutableValue)
+		if !ok {
+			panic(NewUError("%s: %s is not mutable", expr.Pos, expr.To))
+		}
+
+		valType := val.Type()
+		elmType := to.Type().(*types.PointerType).ElemType
+		if !val.Type().Equal(elmType) {
+			if ptr, ok := valType.(*types.PointerType); ok {
+				valType = ptr.ElemType
+			}
+			if ptr, ok := elmType.(*types.PointerType); ok {
+				elmType = ptr.ElemType
+			}
+			panic(NewUError("%s: tried to assign something of type '%s' to type '%s'", expr.Pos, valType.Name(), elmType.Name()))
+		}
+		b.NewStore(val, to.Value)
 
 		return val
 	case FieldAssignment:
@@ -292,27 +329,35 @@ func codegenToplevel(c *ctx, t TopLevel, m *ir.Module) {
 }
 
 func codegen(tls []TopLevel) *ir.Module {
+	defer func() {
+		if v := recover(); v != nil {
+			if uerror, ok := v.(uerror); ok {
+				println(uerror.UError())
+				os.Exit(1)
+			} else {
+				panic(v)
+			}
+		}
+	}()
+
 	c := &ctx{
 		names: []map[Identifier]namedThing{
 			{
-				"int8":   LLVMType{Type: types.I8},
-				"int16":  LLVMType{Type: types.I16},
-				"int32":  LLVMType{Type: types.I32},
-				"int64":  LLVMType{Type: types.I64},
-				"int128": LLVMType{Type: types.I128},
+				"int8":     Int8,
+				"int16":    Int16,
+				"int32":    Int32,
+				"int64":    Int64,
+				"int128":   Int128,
+				"float16":  Float16,
+				"float32":  Float32,
+				"float64":  Float64,
+				"float128": Float128,
+				"bool":     Boolean,
+				"niets":    Niets,
 
-				"float16":  LLVMType{Type: types.Half},
-				"float32":  LLVMType{Type: types.Float},
-				"float64":  LLVMType{Type: types.Double},
-				"float128": LLVMType{Type: types.FP128},
-
-				"bool":  LLVMType{Type: types.I1},
-				"niets": LLVMType{Type: types.Void},
-
-				"true":  LLVMValue{Value: constant.False},
-				"false": LLVMValue{Value: constant.True},
-
-				"nil": LLVMValue{Value: nil},
+				"true":  LLVMValue{Value: constant.NewInt(Boolean.Type.(*types.IntType), 1)},
+				"false": LLVMValue{Value: constant.NewInt(Boolean.Type.(*types.IntType), 0)},
+				"nil":   LLVMValue{Value: nil},
 			},
 		},
 	}

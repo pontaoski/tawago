@@ -2,6 +2,10 @@ type oof struct {
     name: int64
 }
 
+type oofnt struct {
+    name: int64
+}
+
 func not(in: bool) bool {
     let cp = in
     var mutable = in
@@ -10,6 +14,10 @@ func not(in: bool) bool {
     let oofy = oof {
         name: 50
     }
+
+    var bad = 1
+    bad = false
+
     let field = oofy.name
     oofy.name = 20
 
