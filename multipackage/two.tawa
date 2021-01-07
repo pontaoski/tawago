@@ -1,0 +1,4 @@
+func main() {
+    not(false)
+    nil
+}

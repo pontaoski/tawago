@@ -1,6 +1,7 @@
 package main
 
 import (
+	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -19,10 +20,6 @@ func main() {
 				Usage: "build a file",
 				Flags: []cli.Flag{
 					&cli.StringFlag{
-						Name:     "input",
-						Required: true,
-					},
-					&cli.StringFlag{
 						Name: "output",
 					},
 					&cli.BoolFlag{
@@ -31,24 +28,35 @@ func main() {
 					},
 				},
 				Action: func(c *cli.Context) error {
-					in := c.String("input")
 					out := c.String("output")
 
-					fi, err := os.Open(in)
-					if err != nil {
-						log.Fatalf("%+v", err)
-					}
-					defer fi.Close()
-
-					l := NewLexer(fi)
-					p := NewParser(l)
-					err = p.Parse()
-
+					fis, err := ioutil.ReadDir("./")
 					if err != nil {
 						log.Fatalf("%+v", err)
 					}
 
-					module := codegen(p.ast.Toplevels).String()
+					var t []TopLevel
+
+					for _, fi := range fis {
+						if strings.HasSuffix(fi.Name(), ".tawa") {
+							handle, err := os.Open(fi.Name())
+							if err != nil {
+								log.Fatalf("%+v", err)
+							}
+
+							l := NewLexer(handle)
+							p := NewParser(l)
+							err = p.Parse()
+
+							if err != nil {
+								log.Fatalf("%+v", err)
+							}
+
+							t = append(t, p.ast.Toplevels...)
+						}
+					}
+
+					module := codegen(t).String()
 
 					if c.Bool("dump") {
 						println(module)
