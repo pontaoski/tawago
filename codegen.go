@@ -277,6 +277,7 @@ func codegenToplevel(c *ctx, t TopLevel, m *ir.Module) {
 		if v, ok := tl.Kind.(Struct); ok {
 			t := c.top()[tl.Name].(LLVMType)
 			t.Type.SetName(string(tl.Name))
+			m.TypeDefs = append(m.TypeDefs, t.Type)
 			t.fields = make(map[string]int)
 			for idx, field := range v {
 				t.fields[field.Name] = idx
