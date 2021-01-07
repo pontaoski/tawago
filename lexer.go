@@ -149,7 +149,7 @@ func firstChar(r rune) bool {
 }
 
 func otherChar(r rune) bool {
-	return firstChar(r) || unicode.IsDigit(r)
+	return r == '/' || firstChar(r) || unicode.IsDigit(r)
 }
 
 func (l *Lexer) lexIdent() (Position, Position, string) {

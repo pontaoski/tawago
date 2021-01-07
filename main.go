@@ -10,6 +10,39 @@ import (
 	"github.com/ztrue/tracerr"
 )
 
+func parseDirectory(dir string) []TopLevel {
+	var t []TopLevel
+
+	fis, err := ioutil.ReadDir("./")
+	if err != nil {
+		tracerr.PrintSourceColor(err)
+		os.Exit(1)
+	}
+
+	for _, fi := range fis {
+		if strings.HasSuffix(fi.Name(), ".tawa") {
+			handle, err := os.Open(fi.Name())
+			if err != nil {
+				tracerr.PrintSourceColor(err)
+				os.Exit(1)
+			}
+
+			l := NewLexer(handle, fi.Name())
+			p := NewParser(l)
+			err = p.Parse()
+
+			if err != nil {
+				tracerr.PrintSourceColor(err)
+				os.Exit(1)
+			}
+
+			t = append(t, p.ast.Toplevels...)
+		}
+	}
+
+	return t
+}
+
 func main() {
 	app := &cli.App{
 		Name:  "tawago",
@@ -30,34 +63,7 @@ func main() {
 				Action: func(c *cli.Context) error {
 					out := c.String("output")
 
-					fis, err := ioutil.ReadDir("./")
-					if err != nil {
-						tracerr.PrintSourceColor(err)
-						os.Exit(1)
-					}
-
-					var t []TopLevel
-
-					for _, fi := range fis {
-						if strings.HasSuffix(fi.Name(), ".tawa") {
-							handle, err := os.Open(fi.Name())
-							if err != nil {
-								tracerr.PrintSourceColor(err)
-								os.Exit(1)
-							}
-
-							l := NewLexer(handle, fi.Name())
-							p := NewParser(l)
-							err = p.Parse()
-
-							if err != nil {
-								tracerr.PrintSourceColor(err)
-								os.Exit(1)
-							}
-
-							t = append(t, p.ast.Toplevels...)
-						}
-					}
+					t := parseDirectory("./")
 
 					module := codegen(t).String()
 
