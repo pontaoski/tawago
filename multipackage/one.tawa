@@ -7,19 +7,8 @@ type oofnt struct {
 }
 
 func not(in: bool) bool {
-    let cp = in
-    var mutable = in
-    mutable = if mutable then false else true
-
     let oofy = oof {
         name: 50
     }
-
-    var bad = 1
-    bad = false
-
-    let field = oofy.name
-    oofy.name = 20
-
-    mutable
+    oofy.name = false
 }

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -73,18 +74,18 @@ func (c *ctx) lookup(id Identifier) namedThing {
 	panic("could not lookup " + id)
 }
 
-func (c *ctx) lookupField(t types.Type, f string) int {
+func (c *ctx) lookupField(t types.Type, f string) (int, error) {
 	for i := len(c.names) - 1; i >= 0; i-- {
 		for _, kind := range c.names[i] {
 			if val, ok := kind.(LLVMType); ok {
 				if val.Equal(t) {
-					return val.fields[f]
+					return val.fields[f], nil
 				}
 			}
 		}
 	}
 
-	panic("could not find the given type in the current context when accessing a field")
+	return -1, errors.New("could not find the given type in the current context when accessing a field")
 }
 
 func (c *ctx) assign(id Identifier, v namedThing) {
@@ -193,10 +194,17 @@ func codegenExpression(c *ctx, e Expression, b *ir.Block) value.Value {
 		strType, strOk := ptr.ElemType.(*types.StructType)
 
 		if !ok || !strOk {
-			panic("tried to get a field of a non-struct")
+			panic(NewUError("%s: tried to assign to a field of a non-struct", expr.Pos))
 		}
 
-		field := c.lookupField(strType, string(expr.Field))
+		field, err := c.lookupField(strType, string(expr.Field))
+		if err != nil {
+			panic(NewUError("%s: struct type '%s' does not have field '%s'", expr.Pos, strType.Name(), expr.Field))
+		}
+
+		if !strType.Equal(val.Type()) {
+			panic(NewUError("%s: field '%s' has type '%s', not type '%s'", expr.Pos, expr.Field, strType.Fields[field].Name(), val.Type().Name()))
+		}
 
 		eep := b.NewGetElementPtr(strType, of, constant.NewInt(types.I32, int64(0)), constant.NewInt(types.I32, int64(field)))
 
@@ -233,7 +241,10 @@ func codegenExpression(c *ctx, e Expression, b *ir.Block) value.Value {
 			panic("tried to get a field of a non-struct")
 		}
 
-		field := c.lookupField(strType, string(expr.Name))
+		field, err := c.lookupField(strType, string(expr.Name))
+		if err != nil {
+			panic(NewUError("struct type '%s' does not have field '%s'", strType.Name(), expr.Name))
+		}
 
 		return b.NewGetElementPtr(strType, of, constant.NewInt(types.I32, int64(0)), constant.NewInt(types.I32, int64(field)))
 	default:

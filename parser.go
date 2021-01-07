@@ -281,6 +281,7 @@ func (p *Parser) parseExpressionLeaf() Expression {
 }
 
 func (p *Parser) parseExpression() Expression {
+	from := p.l.pos
 	expr := p.parseExpressionLeaf()
 
 	if p.l.PeekIs(PERIOD) {
@@ -293,6 +294,7 @@ func (p *Parser) parseExpression() Expression {
 				Struct: expr,
 				Field:  Identifier(lit),
 				Value:  p.parseExpression(),
+				Pos:    Span{from, p.l.pos},
 			}
 		}
 

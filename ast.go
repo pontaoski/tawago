@@ -83,6 +83,7 @@ type FieldAssignment struct {
 	Struct Expression
 	Field  Identifier
 	Value  Expression
+	Pos    Span
 }
 
 func (v FieldAssignment) is_Expression() {}
