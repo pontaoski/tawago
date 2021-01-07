@@ -1,6 +1,9 @@
 type Kind = int64;
 
-type Identifier = string;
+type Identifier = `struct {
+    Name string
+    Pos  Span
+}`;
 
 type Type =
     | Ident of Identifier

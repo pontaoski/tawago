@@ -8,7 +8,7 @@ type oofnt struct {
 
 func not(in: bool) bool {
     let oofy = oof {
-        name: 50
+        name: false
     }
     oofy.name = false
 }

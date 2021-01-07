@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"reflect"
 
 	"github.com/llir/llvm/ir"
 	"github.com/llir/llvm/ir/constant"
@@ -50,13 +51,13 @@ func NewUError(msg string, fmts ...interface{}) uerror {
 }
 
 type ctx struct {
-	names                  []map[Identifier]namedThing
+	names                  []map[string]namedThing
 	entry                  value.Value
 	forwardDeclarationPass bool
 }
 
 func (c *ctx) pushScope() {
-	c.names = append(c.names, make(map[Identifier]namedThing))
+	c.names = append(c.names, make(map[string]namedThing))
 }
 
 func (c *ctx) popScope() {
@@ -65,13 +66,13 @@ func (c *ctx) popScope() {
 
 func (c *ctx) lookup(id Identifier) namedThing {
 	for i := len(c.names) - 1; i >= 0; i-- {
-		val, ok := c.names[i][id]
+		val, ok := c.names[i][id.Name]
 		if ok {
 			return val
 		}
 	}
 
-	panic("could not lookup " + id)
+	panic("could not lookup " + id.Name)
 }
 
 func (c *ctx) lookupField(t types.Type, f string) (int, error) {
@@ -90,18 +91,33 @@ func (c *ctx) lookupField(t types.Type, f string) (int, error) {
 
 func (c *ctx) assign(id Identifier, v namedThing) {
 	for i := len(c.names) - 1; i >= 0; i-- {
-		_, ok := c.names[i][id]
+		_, ok := c.names[i][id.Name]
 		if ok {
-			c.names[i][id] = v
+			c.names[i][id.Name] = v
 			return
 		}
 	}
 
-	panic("could not find " + id)
+	panic("could not find " + id.Name)
 }
 
-func (c *ctx) top() map[Identifier]namedThing {
+func (c *ctx) top() map[string]namedThing {
 	return c.names[len(c.names)-1]
+}
+
+func posOf(e Expression) Span {
+	defer func() {
+		recover()
+	}()
+
+	v := reflect.ValueOf(e)
+
+	pos := v.FieldByName("Pos")
+	if pos.IsZero() {
+		return Span{}
+	}
+
+	return pos.Interface().(Span)
 }
 
 func codegenExpression(c *ctx, e Expression, b *ir.Block) value.Value {
@@ -118,6 +134,12 @@ func codegenExpression(c *ctx, e Expression, b *ir.Block) value.Value {
 			for name, field := range lit.Fields {
 				ptr := b.NewGetElementPtr(st, val, constant.NewInt(types.I32, int64(0)), constant.NewInt(types.I32, int64(t.fields[name])))
 				expr := codegenExpression(c, field, b)
+
+				fieldType := st.Fields[t.fields[name]]
+				if !fieldType.Equal(expr.Type()) {
+					panic(NewUError("%s: field '%s' has type '%s', not type '%s'", posOf(field), name, fieldType.Name(), expr.Type().Name()))
+				}
+
 				b.NewStore(expr, ptr)
 			}
 
@@ -153,7 +175,7 @@ func codegenExpression(c *ctx, e Expression, b *ir.Block) value.Value {
 	case Declaration:
 		val := codegenExpression(c, expr.Value, b)
 
-		c.top()[expr.To] = LLVMValue{Value: val}
+		c.top()[expr.To.Name] = LLVMValue{Value: val}
 
 		return val
 	case MutDeclaration:
@@ -162,7 +184,7 @@ func codegenExpression(c *ctx, e Expression, b *ir.Block) value.Value {
 		alloca := b.NewAlloca(val.Type())
 		b.NewStore(val, alloca)
 
-		c.top()[expr.To] = LLVMMutableValue{Value: alloca}
+		c.top()[expr.To.Name] = LLVMMutableValue{Value: alloca}
 
 		return val
 	case Assignment:
@@ -197,7 +219,7 @@ func codegenExpression(c *ctx, e Expression, b *ir.Block) value.Value {
 			panic(NewUError("%s: tried to assign to a field of a non-struct", expr.Pos))
 		}
 
-		field, err := c.lookupField(strType, string(expr.Field))
+		field, err := c.lookupField(strType, string(expr.Field.Name))
 		if err != nil {
 			panic(NewUError("%s: struct type '%s' does not have field '%s'", expr.Pos, strType.Name(), expr.Field))
 		}
@@ -241,9 +263,9 @@ func codegenExpression(c *ctx, e Expression, b *ir.Block) value.Value {
 			panic("tried to get a field of a non-struct")
 		}
 
-		field, err := c.lookupField(strType, string(expr.Name))
+		field, err := c.lookupField(strType, string(expr.Field.Name))
 		if err != nil {
-			panic(NewUError("struct type '%s' does not have field '%s'", strType.Name(), expr.Name))
+			panic(NewUError("struct type '%s' does not have field '%s'", strType.Name(), expr.Field))
 		}
 
 		return b.NewGetElementPtr(strType, of, constant.NewInt(types.I32, int64(0)), constant.NewInt(types.I32, int64(field)))
@@ -293,24 +315,24 @@ func codegenToplevel(c *ctx, t TopLevel, m *ir.Module) {
 		if c.forwardDeclarationPass {
 			var params []*ir.Param
 			for _, param := range tl.Arguments {
-				params = append(params, ir.NewParam(string(param.Name), codegenType(c, param.Kind)))
+				params = append(params, ir.NewParam(string(param.Ident.Name), codegenType(c, param.Kind)))
 			}
 
-			fn := m.NewFunc(string(tl.Name), ret, params...)
-			c.top()[tl.Name] = LLVMValue{Value: fn}
+			fn := m.NewFunc(string(tl.Ident.Name), ret, params...)
+			c.top()[tl.Ident.Name] = LLVMValue{Value: fn}
 			return
 		}
 
-		fn := c.lookup(tl.Name).(LLVMValue).Value.(*ir.Func)
+		fn := c.lookup(tl.Ident).(LLVMValue).Value.(*ir.Func)
 		bloc := fn.NewBlock("entry")
 
-		if tl.Name == "main" {
+		if tl.Ident.Name == "main" {
 			c.entry = fn
 		}
 
 		c.pushScope()
 		for i, arg := range tl.Arguments {
-			c.top()[arg.Name] = LLVMValue{Value: fn.Params[i]}
+			c.top()[arg.Ident.Name] = LLVMValue{Value: fn.Params[i]}
 		}
 		retValue := codegenExpression(c, tl.Expr, bloc)
 		c.popScope()
@@ -321,16 +343,16 @@ func codegenToplevel(c *ctx, t TopLevel, m *ir.Module) {
 			fn.Blocks[len(fn.Blocks)-1].NewRet(retValue)
 		}
 	case TypeDeclaration:
-		c.top()[tl.Name] = LLVMType{Type: codegenType(c, tl.Kind)}
+		c.top()[tl.Ident.Name] = LLVMType{Type: codegenType(c, tl.Kind)}
 		if v, ok := tl.Kind.(Struct); ok {
-			t := c.top()[tl.Name].(LLVMType)
-			t.Type.SetName(string(tl.Name))
+			t := c.top()[tl.Ident.Name].(LLVMType)
+			t.Type.SetName(string(tl.Ident.Name))
 			m.TypeDefs = append(m.TypeDefs, t.Type)
 			t.fields = make(map[string]int)
 			for idx, field := range v {
 				t.fields[field.Name] = idx
 			}
-			c.top()[tl.Name] = t
+			c.top()[tl.Ident.Name] = t
 		}
 	case Import:
 		// not dealing with this
@@ -352,7 +374,7 @@ func codegen(tls []TopLevel) *ir.Module {
 	}()
 
 	c := &ctx{
-		names: []map[Identifier]namedThing{
+		names: []map[string]namedThing{
 			{
 				"int8":     Int8,
 				"int16":    Int16,

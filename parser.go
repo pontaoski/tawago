@@ -40,14 +40,14 @@ func (p *Parser) Parse() (err error) {
 		case TYPE:
 			_, name := p.l.LexExpecting(IDENT)
 			p.ast.Toplevels = append(p.ast.Toplevels, TypeDeclaration{
-				Name: Identifier(name),
-				Kind: p.parseType(),
+				Ident: NewID(name),
+				Kind:  p.parseType(),
 			})
 		case FUNC:
 			_, name := p.l.LexExpecting(IDENT)
 			var arguments []struct {
-				Name Identifier
-				Kind Type
+				Ident Identifier
+				Kind  Type
 			}
 
 			p.l.LexExpecting(LPAREN)
@@ -58,11 +58,11 @@ func (p *Parser) Parse() (err error) {
 					kind := p.parseType()
 
 					arguments = append(arguments, struct {
-						Name Identifier
-						Kind Type
+						Ident Identifier
+						Kind  Type
 					}{
-						Name: Identifier(name),
-						Kind: kind,
+						Ident: NewID(name),
+						Kind:  kind,
 					})
 
 					if p.l.PeekIs(COMMA, RPAREN) {
@@ -99,7 +99,7 @@ func (p *Parser) Parse() (err error) {
 				expr = p.parseBlock()
 			}
 			p.ast.Toplevels = append(p.ast.Toplevels, Func{
-				Name:      Identifier(name),
+				Ident:     NewID(name),
 				Arguments: arguments,
 				Returns:   ret,
 				Expr:      expr,
@@ -202,14 +202,14 @@ func (p *Parser) parseExpressionLeaf() Expression {
 		_, ident := p.l.LexExpecting(IDENT)
 		p.l.LexExpecting(EQUALS)
 		return Declaration{
-			To:    Identifier(ident),
+			To:    Identifier(NewID(ident)),
 			Value: p.parseExpression(),
 		}
 	case VAR:
 		_, ident := p.l.LexExpecting(IDENT)
 		p.l.LexExpecting(EQUALS)
 		return MutDeclaration{
-			To:    Identifier(ident),
+			To:    Identifier(NewID(ident)),
 			Value: p.parseExpression(),
 		}
 	case INT:
@@ -220,7 +220,7 @@ func (p *Parser) parseExpressionLeaf() Expression {
 		return Lit{Integer(parsed)}
 	case IDENT:
 		if !p.l.PeekIs(LPAREN, EQUALS, LBRACKET) {
-			return Var(lit)
+			return Var(NewID(lit))
 		}
 
 		if p.l.PeekIs(LPAREN) {
@@ -244,20 +244,20 @@ func (p *Parser) parseExpressionLeaf() Expression {
 			p.l.LexExpecting(RPAREN)
 
 			return Call{
-				Function:  Identifier(lit),
+				Function:  NewID(lit),
 				Arguments: args,
 			}
 		} else if p.l.PeekIs(EQUALS) {
 			p.l.LexExpecting(EQUALS)
 
 			return Assignment{
-				To:    Identifier(lit),
+				To:    NewID(lit),
 				Value: p.parseExpression(),
 				Pos:   Span{tok.Location.From, p.l.pos},
 			}
 		} else if p.l.PeekIs(LBRACKET) {
 			return Lit{StructLiteral{
-				Name:   Identifier(lit),
+				Name:   NewID(lit),
 				Fields: p.parseStructLiteral(),
 			}}
 		}
@@ -285,22 +285,22 @@ func (p *Parser) parseExpression() Expression {
 	expr := p.parseExpressionLeaf()
 
 	if p.l.PeekIs(PERIOD) {
-		_, lit := p.l.LexWithI(1, PERIOD, IDENT)
+		tok, lit := p.l.LexWithI(1, PERIOD, IDENT)
 
 		if p.l.PeekIs(EQUALS) {
 			p.l.LexExpecting(EQUALS)
 
 			return FieldAssignment{
 				Struct: expr,
-				Field:  Identifier(lit),
+				Field:  NewID(lit),
 				Value:  p.parseExpression(),
 				Pos:    Span{from, p.l.pos},
 			}
 		}
 
 		return Field{
-			Of:   expr,
-			Name: Identifier(lit),
+			Of:    expr,
+			Field: Identifier{lit, Span{from, tok.Location.To}},
 		}
 	}
 
@@ -313,7 +313,7 @@ func (p *Parser) parseType() Type {
 
 	switch tok.Kind {
 	case IDENT:
-		return Ident(lit)
+		return Ident(NewID(lit))
 	case FUNC:
 		p.l.LexExpecting(LPAREN)
 		f := FunctionPointer{}

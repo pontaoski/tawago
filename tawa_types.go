@@ -17,3 +17,9 @@ var (
 	Boolean = LLVMType{Type: &types.IntType{BitSize: 1, TypeName: "bool"}}
 	Niets   = LLVMType{Type: &types.VoidType{TypeName: "niets"}}
 )
+
+func NewID(in string) Identifier {
+	return Identifier{
+		Name: in,
+	}
+}

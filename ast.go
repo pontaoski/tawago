@@ -1,7 +1,10 @@
 package main
 
 type Kind int64
-type Identifier string
+type Identifier struct {
+	Name string
+	Pos  Span
+}
 type Type interface {
 	is_Type()
 }
@@ -58,8 +61,8 @@ type Declaration struct {
 func (v Declaration) is_Expression() {}
 
 type Field struct {
-	Of   Expression
-	Name Identifier
+	Of    Expression
+	Field Identifier
 }
 
 func (v Field) is_Expression() {}
@@ -111,10 +114,10 @@ type TopLevel interface {
 	is_TopLevel()
 }
 type Func struct {
-	Name      Identifier
+	Ident     Identifier
 	Arguments []struct {
-		Name Identifier
-		Kind Type
+		Ident Identifier
+		Kind  Type
 	}
 
 	Returns *Type
@@ -128,8 +131,8 @@ type Import string
 func (v Import) is_TopLevel() {}
 
 type TypeDeclaration struct {
-	Name Identifier
-	Kind Type
+	Ident Identifier
+	Kind  Type
 }
 
 func (v TypeDeclaration) is_TopLevel() {}
