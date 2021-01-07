@@ -270,10 +270,6 @@ func (l *Lexer) LexExpecting(k ...TokenKind) (Token, string) {
 }
 
 func (l *Lexer) Lex() (r Token, s string) {
-	defer func() {
-		fmt.Printf("yielding a %s at %s\n", r.Kind, r.To)
-	}()
-
 	if l.peeked != nil {
 		defer func() { l.peeked = nil }()
 		return *l.peeked, l.peekedString
