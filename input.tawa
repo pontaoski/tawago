@@ -1,8 +1,12 @@
 func main() {
-    ohno()
+    not(false)
     nil
 }
 
-func ohno() {
-    nil
+func not(in: bool) bool {
+    let cp = in
+    var mutatable = in
+    mutatable = if mutatable then false else true
+
+    mutatable
 }

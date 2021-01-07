@@ -19,6 +19,18 @@ type Literal =
 type Expression =
     | Lit of Literal
     | Var of Identifier
+    | Declaration of `struct {
+        To      Identifier
+        Value   Expression
+    }`
+    | MutDeclaration of `struct {
+        To      Identifier
+        Value   Expression
+    }`
+    | Assignment of `struct {
+        To    Identifier
+        Value Expression
+    }`
     | Call of `struct {
         Function  Identifier
         Arguments []Expression

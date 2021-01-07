@@ -9,23 +9,62 @@ import (
 )
 
 type namedThing interface{ isNamedThing() }
-type namedThingImpl struct{}
+type NamedThingImpl struct{}
 
-func (n namedThingImpl) isNamedThing() {}
+func (n NamedThingImpl) isNamedThing() {}
 
+type LLVMMutableValue struct {
+	NamedThingImpl
+	value.Value
+}
 type LLVMValue struct {
-	namedThingImpl
+	NamedThingImpl
 	value.Value
 }
 type LLVMType struct {
-	namedThingImpl
+	NamedThingImpl
 	types.Type
 }
 
 type ctx struct {
-	names                  map[Identifier]namedThing
+	names                  []map[Identifier]namedThing
 	entry                  value.Value
 	forwardDeclarationPass bool
+}
+
+func (c *ctx) pushScope() {
+	c.names = append(c.names, make(map[Identifier]namedThing))
+}
+
+func (c *ctx) popScope() {
+	c.names = c.names[:len(c.names)-1]
+}
+
+func (c *ctx) lookup(id Identifier) namedThing {
+	for i := len(c.names) - 1; i >= 0; i-- {
+		val, ok := c.names[i][id]
+		if ok {
+			return val
+		}
+	}
+
+	panic("could not lookup " + id)
+}
+
+func (c *ctx) assign(id Identifier, v namedThing) {
+	for i := len(c.names) - 1; i >= 0; i-- {
+		_, ok := c.names[i][id]
+		if ok {
+			c.names[i][id] = v
+			return
+		}
+	}
+
+	panic("could not find " + id)
+}
+
+func (c *ctx) top() map[Identifier]namedThing {
+	return c.names[len(c.names)-1]
 }
 
 func codegenExpression(c *ctx, e Expression, b *ir.Block) value.Value {
@@ -38,21 +77,50 @@ func codegenExpression(c *ctx, e Expression, b *ir.Block) value.Value {
 			panic("unimplemented")
 		}
 	case Var:
-		return c.names[Identifier(expr)].(LLVMValue)
+		switch v := c.lookup(Identifier(expr)).(type) {
+		case LLVMValue:
+			return v.Value
+		case LLVMMutableValue:
+			return b.NewLoad(v.Value.Type(), v.Value)
+		default:
+			panic("unhandled")
+		}
 	case Call:
 		var args []value.Value
 		for _, arg := range expr.Arguments {
 			args = append(args, codegenExpression(c, arg, b))
 		}
-		return b.NewCall(c.names[expr.Function].(LLVMValue), args...)
+		return b.NewCall(c.lookup(expr.Function).(LLVMValue).Value, args...)
 	case Block:
 		var last value.Value
 
+		c.pushScope()
 		for _, statement := range expr {
 			last = codegenExpression(c, statement, b)
 		}
+		c.popScope()
 
 		return last
+	case Declaration:
+		val := codegenExpression(c, expr.Value, b)
+
+		c.top()[expr.To] = LLVMValue{Value: val}
+
+		return val
+	case MutDeclaration:
+		val := codegenExpression(c, expr.Value, b)
+
+		alloca := b.NewAlloca(val.Type())
+		b.NewStore(val, alloca)
+
+		c.top()[expr.To] = LLVMMutableValue{Value: alloca}
+
+		return val
+	case Assignment:
+		val := codegenExpression(c, expr.Value, b)
+		b.NewStore(val, c.lookup(expr.To).(LLVMMutableValue).Value)
+
+		return val
 	case If:
 		condVal := codegenExpression(c, expr.Condition, b)
 
@@ -84,7 +152,7 @@ func codegenExpression(c *ctx, e Expression, b *ir.Block) value.Value {
 func codegenType(c *ctx, t Type) types.Type {
 	switch kind := t.(type) {
 	case Ident:
-		return c.names[Identifier(kind)].(types.Type)
+		return c.lookup(Identifier(kind)).(LLVMType).Type
 	case FunctionPointer:
 		var ret types.Type = types.Void
 		if kind.Returns != nil {
@@ -125,18 +193,23 @@ func codegenToplevel(c *ctx, t TopLevel, m *ir.Module) {
 			}
 
 			fn := m.NewFunc(string(tl.Name), ret, params...)
-			c.names[tl.Name] = LLVMValue{Value: fn}
+			c.top()[tl.Name] = LLVMValue{Value: fn}
 			return
 		}
 
-		fn := c.names[tl.Name].(LLVMValue).Value.(*ir.Func)
+		fn := c.lookup(tl.Name).(LLVMValue).Value.(*ir.Func)
 		bloc := fn.NewBlock("entry")
 
 		if tl.Name == "main" {
 			c.entry = fn
 		}
 
+		c.pushScope()
+		for i, arg := range tl.Arguments {
+			c.top()[arg.Name] = LLVMValue{Value: fn.Params[i]}
+		}
 		retValue := codegenExpression(c, tl.Expr, bloc)
+		c.popScope()
 
 		if types.IsVoid(ret) {
 			fn.Blocks[len(fn.Blocks)-1].NewRet(nil)
@@ -144,7 +217,7 @@ func codegenToplevel(c *ctx, t TopLevel, m *ir.Module) {
 			fn.Blocks[len(fn.Blocks)-1].NewRet(retValue)
 		}
 	case TypeDeclaration:
-		c.names[tl.Name] = LLVMType{Type: codegenType(c, tl.Kind)}
+		c.top()[tl.Name] = LLVMType{Type: codegenType(c, tl.Kind)}
 	case Import:
 		// not dealing with this
 	default:
@@ -154,25 +227,27 @@ func codegenToplevel(c *ctx, t TopLevel, m *ir.Module) {
 
 func codegen(tls []TopLevel) *ir.Module {
 	c := &ctx{
-		names: map[Identifier]namedThing{
-			"int8":   LLVMType{Type: types.I8},
-			"int16":  LLVMType{Type: types.I16},
-			"int32":  LLVMType{Type: types.I32},
-			"int64":  LLVMType{Type: types.I64},
-			"int128": LLVMType{Type: types.I128},
+		names: []map[Identifier]namedThing{
+			{
+				"int8":   LLVMType{Type: types.I8},
+				"int16":  LLVMType{Type: types.I16},
+				"int32":  LLVMType{Type: types.I32},
+				"int64":  LLVMType{Type: types.I64},
+				"int128": LLVMType{Type: types.I128},
 
-			"float16":  LLVMType{Type: types.Half},
-			"float32":  LLVMType{Type: types.Float},
-			"float64":  LLVMType{Type: types.Double},
-			"float128": LLVMType{Type: types.FP128},
+				"float16":  LLVMType{Type: types.Half},
+				"float32":  LLVMType{Type: types.Float},
+				"float64":  LLVMType{Type: types.Double},
+				"float128": LLVMType{Type: types.FP128},
 
-			"bool":  LLVMType{Type: types.I1},
-			"niets": LLVMType{Type: types.Void},
+				"bool":  LLVMType{Type: types.I1},
+				"niets": LLVMType{Type: types.Void},
 
-			"true":  LLVMValue{Value: constant.False},
-			"false": LLVMValue{Value: constant.True},
+				"true":  LLVMValue{Value: constant.False},
+				"false": LLVMValue{Value: constant.True},
 
-			"nil": LLVMValue{Value: nil},
+				"nil": LLVMValue{Value: nil},
+			},
 		},
 	}
 

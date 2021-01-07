@@ -161,9 +161,23 @@ func (p *Parser) parseBlock() Expression {
 }
 
 func (p *Parser) parseExpression() Expression {
-	tok, lit := p.l.LexExpecting(IDENT, IF, LBRACKET, INT)
+	tok, lit := p.l.LexExpecting(IDENT, IF, LBRACKET, INT, LET, VAR)
 
 	switch tok.Kind {
+	case LET:
+		_, ident := p.l.LexExpecting(IDENT)
+		p.l.LexExpecting(EQUALS)
+		return Declaration{
+			To:    Identifier(ident),
+			Value: p.parseExpression(),
+		}
+	case VAR:
+		_, ident := p.l.LexExpecting(IDENT)
+		p.l.LexExpecting(EQUALS)
+		return MutDeclaration{
+			To:    Identifier(ident),
+			Value: p.parseExpression(),
+		}
 	case INT:
 		parsed, err := strconv.ParseInt(lit, 10, 64)
 		if err != nil {
@@ -171,32 +185,41 @@ func (p *Parser) parseExpression() Expression {
 		}
 		return Lit{Integer(parsed)}
 	case IDENT:
-		if !p.l.PeekIs(LPAREN) {
+		if !p.l.PeekIs(LPAREN, EQUALS) {
 			return Var(lit)
 		}
 
-		p.l.LexExpecting(LPAREN)
-		var args []Expression
+		if p.l.PeekIs(LPAREN) {
+			p.l.LexExpecting(LPAREN)
+			var args []Expression
 
-		if !p.l.PeekIs(RPAREN) {
-			for {
-				args = append(args, p.parseExpression())
+			if !p.l.PeekIs(RPAREN) {
+				for {
+					args = append(args, p.parseExpression())
 
-				if p.l.PeekIs(COMMA, RPAREN) {
-					if p.l.PeekIs(RPAREN) {
-						break
+					if p.l.PeekIs(COMMA, RPAREN) {
+						if p.l.PeekIs(RPAREN) {
+							break
+						}
+						continue
 					}
-					continue
+
+					p.l.LexExpecting(COMMA, RPAREN)
 				}
-
-				p.l.LexExpecting(COMMA, RPAREN)
 			}
-		}
-		p.l.LexExpecting(RPAREN)
+			p.l.LexExpecting(RPAREN)
 
-		return Call{
-			Function:  Identifier(lit),
-			Arguments: args,
+			return Call{
+				Function:  Identifier(lit),
+				Arguments: args,
+			}
+		} else if p.l.PeekIs(EQUALS) {
+			p.l.LexExpecting(EQUALS)
+
+			return Assignment{
+				To:    Identifier(lit),
+				Value: p.parseExpression(),
+			}
 		}
 	case IF:
 		cond := p.parseExpression()

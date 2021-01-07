@@ -43,6 +43,27 @@ type Var Identifier
 
 func (v Var) is_Expression() {}
 
+type Declaration struct {
+	To    Identifier
+	Value Expression
+}
+
+func (v Declaration) is_Expression() {}
+
+type MutDeclaration struct {
+	To    Identifier
+	Value Expression
+}
+
+func (v MutDeclaration) is_Expression() {}
+
+type Assignment struct {
+	To    Identifier
+	Value Expression
+}
+
+func (v Assignment) is_Expression() {}
+
 type Call struct {
 	Function  Identifier
 	Arguments []Expression

@@ -21,6 +21,9 @@ const (
 	EQUALS
 	FATARROW
 
+	VAR
+	LET
+
 	EOS
 
 	INT
@@ -304,6 +307,8 @@ func (l *Lexer) Lex() (Token, string) {
 			"func":   FUNC,
 			"import": IMPORT,
 			"struct": STRUCT,
+			"var":    VAR,
+			"let":    LET,
 		}
 
 		switch {
