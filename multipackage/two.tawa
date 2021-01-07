@@ -1,4 +1,4 @@
 func main() {
-    not(false)
+    not(1)
     nil
 }

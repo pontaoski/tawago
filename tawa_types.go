@@ -1,6 +1,9 @@
 package main
 
-import "github.com/llir/llvm/ir/types"
+import (
+	"github.com/llir/llvm/ir/constant"
+	"github.com/llir/llvm/ir/types"
+)
 
 var (
 	Int8   = LLVMType{Type: &types.IntType{BitSize: 8, TypeName: "int8"}}
@@ -16,6 +19,12 @@ var (
 
 	Boolean = LLVMType{Type: &types.IntType{BitSize: 1, TypeName: "bool"}}
 	Niets   = LLVMType{Type: &types.VoidType{TypeName: "niets"}}
+)
+
+var (
+	True  = LLVMValue{Value: constant.NewInt(Boolean.Type.(*types.IntType), 1)}
+	False = LLVMValue{Value: constant.NewInt(Boolean.Type.(*types.IntType), 0)}
+	Nil   = LLVMValue{Value: nil}
 )
 
 func NewID(in string) Identifier {

@@ -157,11 +157,20 @@ func codegenExpression(c *ctx, e Expression, b *ir.Block) value.Value {
 			panic("unhandled")
 		}
 	case Call:
+		fn := c.lookup(expr.Function).(LLVMValue).Value
+		fnType := fn.Type().(*types.PointerType).ElemType.(*types.FuncType)
+
 		var args []value.Value
-		for _, arg := range expr.Arguments {
+		for idx, arg := range expr.Arguments {
+			val := codegenExpression(c, arg, b)
+
+			if pmType := fnType.Params[idx]; !pmType.Equal(val.Type()) {
+				panic(NewUError("argument %d of function '%s' is of type '%s', not type '%s'", idx, expr.Function.Name, pmType.Name(), val.Type().Name()))
+			}
+
 			args = append(args, codegenExpression(c, arg, b))
 		}
-		return b.NewCall(c.lookup(expr.Function).(LLVMValue).Value, args...)
+		return b.NewCall(fn, args...)
 	case Block:
 		var last value.Value
 
@@ -388,14 +397,23 @@ func codegen(tls []TopLevel) *ir.Module {
 				"bool":     Boolean,
 				"niets":    Niets,
 
-				"true":  LLVMValue{Value: constant.NewInt(Boolean.Type.(*types.IntType), 1)},
-				"false": LLVMValue{Value: constant.NewInt(Boolean.Type.(*types.IntType), 0)},
-				"nil":   LLVMValue{Value: nil},
+				"true":  True,
+				"false": False,
+				"nil":   Nil,
 			},
 		},
 	}
 
 	modu := ir.NewModule()
+
+	for name, builtin := range c.names[0] {
+		if kind, ok := builtin.(LLVMType); ok {
+			if !types.IsVoid(kind.Type) {
+				modu.NewTypeDef(name, kind.Type)
+			}
+		}
+	}
+
 	c.forwardDeclarationPass = true
 	for _, tl := range tls {
 		codegenToplevel(c, tl, modu)
