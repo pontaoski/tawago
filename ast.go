@@ -30,6 +30,13 @@ type Integer int64
 
 func (v Integer) is_Literal() {}
 
+type StructLiteral struct {
+	Name   Identifier
+	Fields map[string]Expression
+}
+
+func (v StructLiteral) is_Literal() {}
+
 type Expression interface {
 	is_Expression()
 }
@@ -49,6 +56,13 @@ type Declaration struct {
 }
 
 func (v Declaration) is_Expression() {}
+
+type Field struct {
+	Of   Expression
+	Name Identifier
+}
+
+func (v Field) is_Expression() {}
 
 type MutDeclaration struct {
 	To    Identifier

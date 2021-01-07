@@ -14,7 +14,11 @@ type Type =
     }`;
 
 type Literal =
-    | Integer of int64;
+    | Integer of int64
+    | StructLiteral of `struct {
+        Name   Identifier
+        Fields map[string]Expression
+    }`;
 
 type Expression =
     | Lit of Literal
@@ -22,6 +26,10 @@ type Expression =
     | Declaration of `struct {
         To      Identifier
         Value   Expression
+    }`
+    | Field of `struct {
+        Of   Expression
+        Name Identifier
     }`
     | MutDeclaration of `struct {
         To      Identifier

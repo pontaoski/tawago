@@ -20,6 +20,7 @@ const (
 	COMMA
 	EQUALS
 	FATARROW
+	PERIOD
 
 	VAR
 	LET
@@ -225,6 +226,18 @@ func (l *Lexer) PeekIsWithRet(k ...TokenKind) (bool, Token, string) {
 	return false, Token{}, ""
 }
 
+func (l *Lexer) LexWithI(i int, kinds ...TokenKind) (t Token, s string) {
+	for idx, kind := range kinds {
+		tok, lit := l.LexExpecting(kind)
+		if idx == i {
+			t = tok
+			s = lit
+		}
+	}
+
+	return
+}
+
 func (l *Lexer) LexExpecting(k ...TokenKind) (Token, string) {
 	token, lit := l.Lex()
 	for _, kind := range k {
@@ -282,6 +295,7 @@ func (l *Lexer) Lex() (Token, string) {
 			'}': RBRACKET,
 			',': COMMA,
 			';': EOS,
+			'.': PERIOD,
 		}
 
 		if kind, ok := data[r]; ok {

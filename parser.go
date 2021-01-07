@@ -160,7 +160,51 @@ func (p *Parser) parseBlock() Expression {
 	return Block(statements)
 }
 
-func (p *Parser) parseExpression() Expression {
+func (p *Parser) parseStructLiteral() (r map[string]Expression) {
+	r = map[string]Expression{}
+
+	p.l.LexExpecting(LBRACKET)
+
+	if !p.l.PeekIs(RBRACKET) {
+		for {
+			if p.l.PeekIs(COMMA, EOS, RBRACKET) {
+				if p.l.PeekIs(RBRACKET) {
+					break
+				}
+				p.l.LexExpecting(COMMA, EOS)
+				continue
+			}
+
+			tok, name := p.l.LexExpecting(IDENT)
+			p.l.LexExpecting(COLON)
+			expr := p.parseExpression()
+
+			if _, ok := r[name]; ok {
+				panic(DuplicateField{
+					Name: name,
+					From: tok.From,
+					To:   tok.To,
+				})
+			}
+
+			r[name] = expr
+
+			if p.l.PeekIs(COMMA, EOS, RBRACKET) {
+				if p.l.PeekIs(RBRACKET) {
+					break
+				}
+				continue
+			}
+
+			p.l.LexExpecting(COMMA, RBRACKET)
+		}
+	}
+	p.l.LexExpecting(RBRACKET)
+
+	return
+}
+
+func (p *Parser) parseExpressionLeaf() Expression {
 	tok, lit := p.l.LexExpecting(IDENT, IF, LBRACKET, INT, LET, VAR)
 
 	switch tok.Kind {
@@ -185,7 +229,7 @@ func (p *Parser) parseExpression() Expression {
 		}
 		return Lit{Integer(parsed)}
 	case IDENT:
-		if !p.l.PeekIs(LPAREN, EQUALS) {
+		if !p.l.PeekIs(LPAREN, EQUALS, LBRACKET) {
 			return Var(lit)
 		}
 
@@ -220,6 +264,11 @@ func (p *Parser) parseExpression() Expression {
 				To:    Identifier(lit),
 				Value: p.parseExpression(),
 			}
+		} else if p.l.PeekIs(LBRACKET) {
+			return Lit{StructLiteral{
+				Name:   Identifier(lit),
+				Fields: p.parseStructLiteral(),
+			}}
 		}
 	case IF:
 		cond := p.parseExpression()
@@ -238,6 +287,21 @@ func (p *Parser) parseExpression() Expression {
 	}
 
 	panic("unhandled")
+}
+
+func (p *Parser) parseExpression() Expression {
+	expr := p.parseExpressionLeaf()
+
+	if p.l.PeekIs(PERIOD) {
+		_, lit := p.l.LexWithI(1, PERIOD, IDENT)
+
+		return Field{
+			Of:   expr,
+			Name: Identifier(lit),
+		}
+	}
+
+	return expr
 }
 
 // expected to be called after reading type keyword and name token.
@@ -271,6 +335,14 @@ func (p *Parser) parseType() Type {
 		p.l.LexExpecting(LBRACKET)
 		if !p.l.PeekIs(RBRACKET) {
 			for {
+				if p.l.PeekIs(EOS, RBRACKET) {
+					if p.l.PeekIs(RBRACKET) {
+						break
+					}
+					p.l.LexExpecting(EOS)
+					continue
+				}
+
 				_, name := p.l.LexExpecting(IDENT)
 				p.l.LexExpecting(COLON)
 				kind := p.parseType()

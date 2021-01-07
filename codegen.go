@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+
 	"github.com/llir/llvm/ir"
 	"github.com/llir/llvm/ir/constant"
 	"github.com/llir/llvm/ir/enum"
@@ -24,6 +26,7 @@ type LLVMValue struct {
 type LLVMType struct {
 	NamedThingImpl
 	types.Type
+	fields map[string]int
 }
 
 type ctx struct {
@@ -51,6 +54,20 @@ func (c *ctx) lookup(id Identifier) namedThing {
 	panic("could not lookup " + id)
 }
 
+func (c *ctx) lookupField(t types.Type, f string) int {
+	for i := len(c.names) - 1; i >= 0; i-- {
+		for _, kind := range c.names[i] {
+			if val, ok := kind.(LLVMType); ok {
+				if val.Equal(t) {
+					return val.fields[f]
+				}
+			}
+		}
+	}
+
+	panic("could not find the given type in the current context when accessing a field")
+}
+
 func (c *ctx) assign(id Identifier, v namedThing) {
 	for i := len(c.names) - 1; i >= 0; i-- {
 		_, ok := c.names[i][id]
@@ -73,6 +90,18 @@ func codegenExpression(c *ctx, e Expression, b *ir.Block) value.Value {
 		switch lit := expr.Literal.(type) {
 		case Integer:
 			return constant.NewInt(types.I64, int64(lit))
+		case StructLiteral:
+			t := c.lookup(lit.Name).(LLVMType)
+			st := t.Type.(*types.StructType)
+
+			val := b.NewAlloca(t.Type.(*types.StructType))
+			for name, field := range lit.Fields {
+				ptr := b.NewGetElementPtr(st, val, constant.NewInt(types.I32, int64(0)), constant.NewInt(types.I32, int64(t.fields[name])))
+				expr := codegenExpression(c, field, b)
+				b.NewStore(expr, ptr)
+			}
+
+			return val
 		default:
 			panic("unimplemented")
 		}
@@ -143,6 +172,19 @@ func codegenExpression(c *ctx, e Expression, b *ir.Block) value.Value {
 		elseBloc.NewBr(mergeBloc)
 
 		return phi
+	case Field:
+		of := codegenExpression(c, expr.Of, b)
+		ptr, ok := of.Type().(*types.PointerType)
+		strType, strOk := ptr.ElemType.(*types.StructType)
+
+		if !ok || !strOk {
+			panic("tried to get a field of a non-struct")
+		}
+
+		field := c.lookupField(strType, string(expr.Name))
+
+		fmt.Printf("%#v\n", ptr)
+		return b.NewGetElementPtr(strType, of, constant.NewInt(types.I32, int64(0)), constant.NewInt(types.I32, int64(field)))
 	default:
 		panic("unhandled")
 	}
@@ -218,6 +260,15 @@ func codegenToplevel(c *ctx, t TopLevel, m *ir.Module) {
 		}
 	case TypeDeclaration:
 		c.top()[tl.Name] = LLVMType{Type: codegenType(c, tl.Kind)}
+		if v, ok := tl.Kind.(Struct); ok {
+			t := c.top()[tl.Name].(LLVMType)
+			t.Type.SetName(string(tl.Name))
+			t.fields = make(map[string]int)
+			for idx, field := range v {
+				t.fields[field.Name] = idx
+			}
+			c.top()[tl.Name] = t
+		}
 	case Import:
 		// not dealing with this
 	default:

@@ -3,10 +3,19 @@ func main() {
     nil
 }
 
+type oof struct {
+    name: int64
+}
+
 func not(in: bool) bool {
     let cp = in
-    var mutatable = in
-    mutatable = if mutatable then false else true
+    var mutable = in
+    mutable = if mutable then false else true
 
-    mutatable
+    let oofy = oof {
+        name: 50
+    }
+    let field = oofy.name
+
+    mutable
 }
