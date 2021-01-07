@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 	"unicode"
 )
@@ -52,7 +53,12 @@ func (t TokenKind) String() string {
 		RBRACKET: "RBRACKET",
 		COMMA:    "COMMA",
 		EQUALS:   "EQUALS",
+		FATARROW: "FATARROW",
+		PERIOD:   "PERIOD",
+		VAR:      "VAR",
+		LET:      "LET",
 		EOS:      "EOS",
+		INT:      "INT",
 		IDENT:    "IDENT",
 		STRING:   "STRING",
 		TYPE:     "TYPE",
@@ -67,15 +73,24 @@ func (t TokenKind) String() string {
 }
 
 type Position struct {
-	Line   int
-	Column int
+	Line     int
+	Column   int
+	Filename string
+}
+
+func (p Position) String() string {
+	if p.Filename == "" {
+		p.Filename = "<unknown>"
+	}
+	return fmt.Sprintf("%s:%d:%d", p.Filename, p.Line, p.Column)
 }
 
 type Lexer struct {
-	pos          Position
-	reader       *bufio.Reader
-	peeked       *Token
-	peekedString string
+	pos           Position
+	reader        *bufio.Reader
+	peeked        *Token
+	peekedString  string
+	insertNewline bool
 }
 
 type Token struct {
@@ -84,9 +99,9 @@ type Token struct {
 	To   Position
 }
 
-func NewLexer(reader io.Reader) *Lexer {
+func NewLexer(reader io.Reader, filename string) *Lexer {
 	return &Lexer{
-		pos:    Position{Line: 1, Column: 0},
+		pos:    Position{Line: 1, Column: 0, Filename: filename},
 		reader: bufio.NewReader(reader),
 	}
 }
@@ -254,11 +269,47 @@ func (l *Lexer) LexExpecting(k ...TokenKind) (Token, string) {
 	})
 }
 
-func (l *Lexer) Lex() (Token, string) {
+func (l *Lexer) Lex() (r Token, s string) {
+	defer func() {
+		fmt.Printf("yielding a %s at %s\n", r.Kind, r.To)
+	}()
+
 	if l.peeked != nil {
 		defer func() { l.peeked = nil }()
 		return *l.peeked, l.peekedString
 	}
+	if l.insertNewline {
+		l.insertNewline = false
+		return Token{
+			Kind: EOS,
+			From: l.pos,
+			To:   l.pos,
+		}, "\n"
+	}
+
+	defer func() {
+		byt, err := l.reader.Peek(1)
+		if err != nil && err != io.EOF {
+			panic(err)
+		}
+		if err == io.EOF {
+			byt = append(byt, '\n')
+		}
+
+		if byt[0] == '\n' {
+			switch r.Kind {
+			case IDENT, RBRACKET, RPAREN, INT, STRING:
+				_, err = l.reader.ReadByte()
+				if err != nil {
+					panic(err)
+				}
+
+				l.pos.Column = 0
+				l.pos.Line++
+				l.insertNewline = true
+			}
+		}
+	}()
 
 	for {
 		r, _, err := l.reader.ReadRune()
@@ -305,7 +356,7 @@ func (l *Lexer) Lex() (Token, string) {
 		switch r {
 		case '\n':
 			l.newline()
-			return l.kinded(EOS), "\n"
+			continue
 		case '`':
 			l.backup()
 			from, to, lit := l.lexString()

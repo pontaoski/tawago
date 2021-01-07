@@ -6,7 +6,7 @@ import (
 )
 
 func TestLexer(t *testing.T) {
-	l := NewLexer(strings.NewReader("aaa if else then ;"))
+	l := NewLexer(strings.NewReader("aaa if else then ;"), "stdin")
 	tokens := l.lexToEOF()
 	t.Fatalf("%#v", tokens)
 }

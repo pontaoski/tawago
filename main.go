@@ -2,12 +2,12 @@ package main
 
 import (
 	"io/ioutil"
-	"log"
 	"os"
 	"os/exec"
 	"strings"
 
 	"github.com/urfave/cli/v2"
+	"github.com/ztrue/tracerr"
 )
 
 func main() {
@@ -32,7 +32,8 @@ func main() {
 
 					fis, err := ioutil.ReadDir("./")
 					if err != nil {
-						log.Fatalf("%+v", err)
+						tracerr.PrintSourceColor(err)
+						os.Exit(1)
 					}
 
 					var t []TopLevel
@@ -41,15 +42,17 @@ func main() {
 						if strings.HasSuffix(fi.Name(), ".tawa") {
 							handle, err := os.Open(fi.Name())
 							if err != nil {
-								log.Fatalf("%+v", err)
+								tracerr.PrintSourceColor(err)
+								os.Exit(1)
 							}
 
-							l := NewLexer(handle)
+							l := NewLexer(handle, fi.Name())
 							p := NewParser(l)
 							err = p.Parse()
 
 							if err != nil {
-								log.Fatalf("%+v", err)
+								tracerr.PrintSourceColor(err)
+								os.Exit(1)
 							}
 
 							t = append(t, p.ast.Toplevels...)
@@ -65,7 +68,8 @@ func main() {
 
 					clang, err := exec.LookPath("clang")
 					if err != nil {
-						log.Fatalf("%+v", err)
+						tracerr.PrintSourceColor(err)
+						os.Exit(1)
 					}
 
 					cmd := exec.Cmd{
@@ -78,7 +82,8 @@ func main() {
 
 					err = cmd.Run()
 					if err != nil {
-						log.Fatalf("%+v", err)
+						tracerr.PrintSourceColor(err)
+						os.Exit(1)
 					}
 
 					return nil
