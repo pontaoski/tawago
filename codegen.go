@@ -1,8 +1,6 @@
 package main
 
 import (
-	"fmt"
-
 	"github.com/llir/llvm/ir"
 	"github.com/llir/llvm/ir/constant"
 	"github.com/llir/llvm/ir/enum"
@@ -150,6 +148,23 @@ func codegenExpression(c *ctx, e Expression, b *ir.Block) value.Value {
 		b.NewStore(val, c.lookup(expr.To).(LLVMMutableValue).Value)
 
 		return val
+	case FieldAssignment:
+		val := codegenExpression(c, expr.Value, b)
+
+		of := codegenExpression(c, expr.Struct, b)
+		ptr, ok := of.Type().(*types.PointerType)
+		strType, strOk := ptr.ElemType.(*types.StructType)
+
+		if !ok || !strOk {
+			panic("tried to get a field of a non-struct")
+		}
+
+		field := c.lookupField(strType, string(expr.Field))
+
+		eep := b.NewGetElementPtr(strType, of, constant.NewInt(types.I32, int64(0)), constant.NewInt(types.I32, int64(field)))
+
+		b.NewStore(val, eep)
+		return val
 	case If:
 		condVal := codegenExpression(c, expr.Condition, b)
 
@@ -183,7 +198,6 @@ func codegenExpression(c *ctx, e Expression, b *ir.Block) value.Value {
 
 		field := c.lookupField(strType, string(expr.Name))
 
-		fmt.Printf("%#v\n", ptr)
 		return b.NewGetElementPtr(strType, of, constant.NewInt(types.I32, int64(0)), constant.NewInt(types.I32, int64(field)))
 	default:
 		panic("unhandled")

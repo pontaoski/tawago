@@ -16,6 +16,7 @@ func not(in: bool) bool {
         name: 50
     }
     let field = oofy.name
+    oofy.name = 20
 
     mutable
 }

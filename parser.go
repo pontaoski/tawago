@@ -295,6 +295,16 @@ func (p *Parser) parseExpression() Expression {
 	if p.l.PeekIs(PERIOD) {
 		_, lit := p.l.LexWithI(1, PERIOD, IDENT)
 
+		if p.l.PeekIs(EQUALS) {
+			p.l.LexExpecting(EQUALS)
+
+			return FieldAssignment{
+				Struct: expr,
+				Field:  Identifier(lit),
+				Value:  p.parseExpression(),
+			}
+		}
+
 		return Field{
 			Of:   expr,
 			Name: Identifier(lit),

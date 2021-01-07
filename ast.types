@@ -39,6 +39,11 @@ type Expression =
         To    Identifier
         Value Expression
     }`
+    | FieldAssignment of `struct {
+        Struct Expression
+        Field  Identifier
+        Value  Expression
+    }`
     | Call of `struct {
         Function  Identifier
         Arguments []Expression

@@ -78,6 +78,14 @@ type Assignment struct {
 
 func (v Assignment) is_Expression() {}
 
+type FieldAssignment struct {
+	Struct Expression
+	Field  Identifier
+	Value  Expression
+}
+
+func (v FieldAssignment) is_Expression() {}
+
 type Call struct {
 	Function  Identifier
 	Arguments []Expression
