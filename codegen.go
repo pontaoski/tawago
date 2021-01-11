@@ -430,7 +430,7 @@ func codegen(tls []TopLevel) *ir.Module {
 		bloc := opening.NewBlock("_entry")
 
 		bloc.NewCall(c.entry)
-		bloc.NewCall(ir.NewInlineAsm(types.NewPointer(types.NewFunc(types.Void)), `movl $$0x1, %eax; movl $$0x1, %ebx; int $$0x80`, ``))
+		bloc.NewCall(ir.NewInlineAsm(types.NewPointer(types.NewFunc(types.Void)), `movl $$0x3C, %eax; movl $$0x0, %ebx; syscall`, ``))
 		bloc.NewRet(nil)
 	}
 

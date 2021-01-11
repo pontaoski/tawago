@@ -72,21 +72,13 @@ func main() {
 						os.Exit(0)
 					}
 
-					clang, err := exec.LookPath("clang")
-					if err != nil {
-						tracerr.PrintSourceColor(err)
-						os.Exit(1)
-					}
+					cmd := exec.Command("clang", "-nostdlib", "-Wl,-e,_tawa_main", "-o", out, "-x", "ir", "-")
 
-					cmd := exec.Cmd{
-						Path:   clang,
-						Args:   []string{"-Wl,-e,_tawa_main", "-o", out, "-x", "ir", "-"},
-						Stdin:  strings.NewReader(module),
-						Stdout: os.Stdout,
-						Stderr: os.Stderr,
-					}
+					cmd.Stdin = strings.NewReader(module)
+					cmd.Stdout = os.Stdout
+					cmd.Stderr = os.Stderr
 
-					err = cmd.Run()
+					err := cmd.Run()
 					if err != nil {
 						tracerr.PrintSourceColor(err)
 						os.Exit(1)
