@@ -12,16 +12,17 @@ type Type =
         Returns   *Type
     }`
     | Struct of `[]struct {
-        Name string
+        Ident string
         Kind Type
     }`;
 
 type Literal =
     | Integer of int64
     | StructLiteral of `struct {
-        Name   Identifier
+        Ident   Identifier
         Fields map[string]Expression
-    }`;
+    }`
+    | StringLiteral of string;
 
 type Expression =
     | Lit of Literal
@@ -32,7 +33,7 @@ type Expression =
     }`
     | Field of `struct {
         Of   Expression
-        Name Identifier
+        Ident Identifier
     }`
     | MutDeclaration of `struct {
         To      Identifier
@@ -62,9 +63,9 @@ type Expression =
 
 type TopLevel =
     | Func of `struct {
-        Name Identifier
+        Ident Identifier
         Arguments []struct{
-            Name Identifier
+            Ident Identifier
             Kind Type
         }
 
@@ -73,7 +74,7 @@ type TopLevel =
     }`
     | Import of string
     | TypeDeclaration of `struct {
-        Name Identifier
+        Ident Identifier
         Kind Type
     }`;
 

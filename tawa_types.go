@@ -17,8 +17,22 @@ var (
 	Float64  = LLVMType{Type: &types.FloatType{Kind: types.FloatKindDouble, TypeName: "float64"}}
 	Float128 = LLVMType{Type: &types.FloatType{Kind: types.FloatKindFP128, TypeName: "float128"}}
 
+	Byte = LLVMType{Type: &types.IntType{BitSize: 8, TypeName: "byte"}}
+
 	Boolean = LLVMType{Type: &types.IntType{BitSize: 1, TypeName: "bool"}}
 	Niets   = LLVMType{Type: &types.VoidType{TypeName: "niets"}}
+
+	String = LLVMType{
+		Type: func() types.Type {
+			strct := types.NewStruct(
+				Int64.Type,
+				types.NewPointer(Byte),
+			)
+			strct.SetName("string")
+
+			return strct
+		}(),
+	}
 )
 
 var (

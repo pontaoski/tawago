@@ -3,9 +3,12 @@ package main
 import (
 	"errors"
 	"fmt"
+	"hash/fnv"
 	"os"
 	"reflect"
+	"strconv"
 
+	"github.com/alecthomas/repr"
 	"github.com/llir/llvm/ir"
 	"github.com/llir/llvm/ir/constant"
 	"github.com/llir/llvm/ir/enum"
@@ -54,6 +57,7 @@ type ctx struct {
 	names                  []map[string]namedThing
 	entry                  value.Value
 	forwardDeclarationPass bool
+	stringConstants        map[string]value.Value
 }
 
 func (c *ctx) pushScope() {
@@ -120,6 +124,12 @@ func posOf(e Expression) Span {
 	return pos.Interface().(Span)
 }
 
+func hash(s string) string {
+	h := fnv.New32a()
+	h.Write([]byte(s))
+	return strconv.FormatUint(uint64(h.Sum32()), 10)
+}
+
 func codegenExpression(c *ctx, e Expression, b *ir.Block) value.Value {
 	switch expr := e.(type) {
 	case Lit:
@@ -127,7 +137,7 @@ func codegenExpression(c *ctx, e Expression, b *ir.Block) value.Value {
 		case Integer:
 			return constant.NewInt(Int64.Type.(*types.IntType), int64(lit))
 		case StructLiteral:
-			t := c.lookup(lit.Name).(LLVMType)
+			t := c.lookup(lit.Ident).(LLVMType)
 			st := t.Type.(*types.StructType)
 
 			val := b.NewAlloca(t.Type.(*types.StructType))
@@ -142,6 +152,25 @@ func codegenExpression(c *ctx, e Expression, b *ir.Block) value.Value {
 
 				b.NewStore(expr, ptr)
 			}
+
+			return val
+		case StringLiteral:
+			val := b.NewAlloca(String.Type)
+
+			dlen := getStructElm(b, String.Type, val, 0)
+			data := getStructElm(b, String.Type, val, 1)
+
+			b.NewStore(constant.NewInt(Int64.Type.(*types.IntType), int64(len(lit))), dlen)
+
+			rawdata, ok := c.stringConstants[string(lit)]
+			if !ok {
+				rawdata = b.Parent.Parent.NewGlobalDef("_str_"+hash(string(lit)), constant.NewCharArrayFromString(string(lit)))
+
+				c.stringConstants[string(lit)] = rawdata
+			}
+
+			casted := b.NewBitCast(rawdata, types.NewPointer(Byte))
+			b.NewStore(casted, data)
 
 			return val
 		default:
@@ -165,6 +194,8 @@ func codegenExpression(c *ctx, e Expression, b *ir.Block) value.Value {
 			val := codegenExpression(c, arg, b)
 
 			if pmType := fnType.Params[idx]; !pmType.Equal(val.Type()) {
+				repr.Println(fnType.Params[idx])
+				repr.Println(val.Type())
 				panic(NewUError("argument %d of function '%s' is of type '%s', not type '%s'", idx, expr.Function.Name, pmType.Name(), val.Type().Name()))
 			}
 
@@ -272,9 +303,9 @@ func codegenExpression(c *ctx, e Expression, b *ir.Block) value.Value {
 			panic("tried to get a field of a non-struct")
 		}
 
-		field, err := c.lookupField(strType, string(expr.Field.Name))
+		field, err := c.lookupField(strType, string(expr.Ident.Name))
 		if err != nil {
-			panic(NewUError("struct type '%s' does not have field '%s'", strType.Name(), expr.Field))
+			panic(NewUError("struct type '%s' does not have field '%s'", strType.Name(), expr.Ident))
 		}
 
 		return b.NewGetElementPtr(strType, of, constant.NewInt(types.I32, int64(0)), constant.NewInt(types.I32, int64(field)))
@@ -359,7 +390,7 @@ func codegenToplevel(c *ctx, t TopLevel, m *ir.Module) {
 			m.TypeDefs = append(m.TypeDefs, t.Type)
 			t.fields = make(map[string]int)
 			for idx, field := range v {
-				t.fields[field.Name] = idx
+				t.fields[field.Ident] = idx
 			}
 			c.top()[tl.Ident.Name] = t
 		}
@@ -396,22 +427,51 @@ func codegen(tls []TopLevel) *ir.Module {
 				"float128": Float128,
 				"bool":     Boolean,
 				"niets":    Niets,
+				"byte":     Byte,
+
+				"string": String,
 
 				"true":  True,
 				"false": False,
 				"nil":   Nil,
 			},
 		},
+		stringConstants: map[string]value.Value{},
 	}
 
 	modu := ir.NewModule()
 
-	for name, builtin := range c.names[0] {
+	keys := []string{
+		"int8",
+		"int16",
+		"int32",
+		"int64",
+		"int128",
+		"float16",
+		"float32",
+		"float64",
+		"float128",
+		"bool",
+		"niets",
+		"byte",
+		"string",
+		"true",
+		"false",
+		"nil",
+	}
+
+	for _, name := range keys {
+		builtin := c.names[0][name]
 		if kind, ok := builtin.(LLVMType); ok {
 			if !types.IsVoid(kind.Type) {
 				modu.NewTypeDef(name, kind.Type)
 			}
 		}
+	}
+
+	names := addBuiltins(modu)
+	for name, value := range names {
+		c.names[0][name] = LLVMValue{Value: value}
 	}
 
 	c.forwardDeclarationPass = true

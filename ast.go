@@ -20,8 +20,8 @@ type FunctionPointer struct {
 func (v FunctionPointer) is_Type() {}
 
 type Struct []struct {
-	Name string
-	Kind Type
+	Ident string
+	Kind  Type
 }
 
 func (v Struct) is_Type() {}
@@ -34,11 +34,15 @@ type Integer int64
 func (v Integer) is_Literal() {}
 
 type StructLiteral struct {
-	Name   Identifier
+	Ident  Identifier
 	Fields map[string]Expression
 }
 
 func (v StructLiteral) is_Literal() {}
+
+type StringLiteral string
+
+func (v StringLiteral) is_Literal() {}
 
 type Expression interface {
 	is_Expression()
@@ -62,7 +66,7 @@ func (v Declaration) is_Expression() {}
 
 type Field struct {
 	Of    Expression
-	Field Identifier
+	Ident Identifier
 }
 
 func (v Field) is_Expression() {}

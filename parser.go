@@ -195,7 +195,7 @@ func (p *Parser) parseStructLiteral() (r map[string]Expression) {
 }
 
 func (p *Parser) parseExpressionLeaf() Expression {
-	tok, lit := p.l.LexExpecting(IDENT, IF, LBRACKET, INT, LET, VAR)
+	tok, lit := p.l.LexExpecting(IDENT, IF, STRING, LBRACKET, INT, LET, VAR)
 
 	switch tok.Kind {
 	case LET:
@@ -212,6 +212,8 @@ func (p *Parser) parseExpressionLeaf() Expression {
 			To:    Identifier(NewID(ident)),
 			Value: p.parseExpression(),
 		}
+	case STRING:
+		return Lit{StringLiteral(lit)}
 	case INT:
 		parsed, err := strconv.ParseInt(lit, 10, 64)
 		if err != nil {
@@ -257,7 +259,7 @@ func (p *Parser) parseExpressionLeaf() Expression {
 			}
 		} else if p.l.PeekIs(LBRACKET) {
 			return Lit{StructLiteral{
-				Name:   NewID(lit),
+				Ident:  NewID(lit),
 				Fields: p.parseStructLiteral(),
 			}}
 		}
@@ -300,7 +302,7 @@ func (p *Parser) parseExpression() Expression {
 
 		return Field{
 			Of:    expr,
-			Field: Identifier{lit, Span{from, tok.Location.To}},
+			Ident: Identifier{lit, Span{from, tok.Location.To}},
 		}
 	}
 
@@ -351,11 +353,11 @@ func (p *Parser) parseType() Type {
 				kind := p.parseType()
 
 				s = append(s, struct {
-					Name string
-					Kind Type
+					Ident string
+					Kind  Type
 				}{
-					Name: name,
-					Kind: kind,
+					Ident: name,
+					Kind:  kind,
 				})
 
 				if p.l.PeekIs(EOS, RBRACKET) {
