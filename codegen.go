@@ -156,6 +156,7 @@ func codegenExpression(c *ctx, e Expression, b *ir.Block) value.Value {
 			return val
 		case StringLiteral:
 			val := b.NewAlloca(String.Type)
+			val.Typ = StringPointer.Type.(*types.PointerType)
 
 			dlen := getStructElm(b, String.Type, val, 0)
 			data := getStructElm(b, String.Type, val, 1)
@@ -194,6 +195,7 @@ func codegenExpression(c *ctx, e Expression, b *ir.Block) value.Value {
 			val := codegenExpression(c, arg, b)
 
 			if pmType := fnType.Params[idx]; !pmType.Equal(val.Type()) {
+				println("===")
 				repr.Println(fnType.Params[idx])
 				repr.Println(val.Type())
 				panic(NewUError("argument %d of function '%s' is of type '%s', not type '%s'", idx, expr.Function.Name, pmType.Name(), val.Type().Name()))
@@ -429,7 +431,8 @@ func codegen(tls []TopLevel) *ir.Module {
 				"niets":    Niets,
 				"byte":     Byte,
 
-				"string": String,
+				"string":      StringPointer,
+				"string_impl": String,
 
 				"true":  True,
 				"false": False,
@@ -455,6 +458,7 @@ func codegen(tls []TopLevel) *ir.Module {
 		"niets",
 		"byte",
 		"string",
+		"string_impl",
 		"true",
 		"false",
 		"nil",

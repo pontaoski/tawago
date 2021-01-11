@@ -28,10 +28,13 @@ var (
 				Int64.Type,
 				types.NewPointer(Byte),
 			)
-			strct.SetName("string")
+			strct.SetName("string_impl")
 
 			return strct
 		}(),
+	}
+	StringPointer = LLVMType{
+		Type: types.NewPointer(String),
 	}
 )
 

@@ -5,6 +5,7 @@ func ohno() string {
 func main() {
     let str = ohno()
     print(str)
+    print(`eep`)
 
     not(false)
     nil

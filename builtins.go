@@ -26,7 +26,7 @@ func addBuiltins(m *ir.Module) (ret map[string]value.Value) {
 }
 
 func addPrint(m *ir.Module) (string, value.Value) {
-	fn := m.NewFunc("print", types.Void, ir.NewParam("input", types.NewPointer(String.Type)))
+	fn := m.NewFunc("print", types.Void, ir.NewParam("input", StringPointer.Type))
 	entry := fn.NewBlock("entry")
 
 	len := getStructElm(entry, String.Type, fn.Params[0], 0)
