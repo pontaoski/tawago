@@ -4,9 +4,12 @@ import (
 	"errors"
 	"fmt"
 	"hash/fnv"
+	"log"
 	"os"
 	"reflect"
 	"strconv"
+	"strings"
+	"unicode"
 
 	"github.com/alecthomas/repr"
 	"github.com/llir/llvm/ir"
@@ -58,6 +61,9 @@ type ctx struct {
 	entry                  value.Value
 	forwardDeclarationPass bool
 	stringConstants        map[string]value.Value
+	sets                   settings
+	publicSymbolPrefix     string
+	ti                     typeInfo
 }
 
 func (c *ctx) pushScope() {
@@ -165,7 +171,10 @@ func codegenExpression(c *ctx, e Expression, b *ir.Block) value.Value {
 
 			rawdata, ok := c.stringConstants[string(lit)]
 			if !ok {
-				rawdata = b.Parent.Parent.NewGlobalDef("_str_"+hash(string(lit)), constant.NewCharArrayFromString(string(lit)))
+				sym := b.Parent.Parent.NewGlobalDef("_str_"+hash(string(lit)), constant.NewCharArrayFromString(string(lit)))
+				sym.Immutable = true
+				sym.Visibility = enum.VisibilityHidden
+				rawdata = sym
 
 				c.stringConstants[string(lit)] = rawdata
 			}
@@ -346,6 +355,13 @@ func codegenType(c *ctx, t Type) types.Type {
 
 }
 
+func firstRune(str string) (r rune) {
+	for _, r = range str {
+		return
+	}
+	return
+}
+
 func codegenToplevel(c *ctx, t TopLevel, m *ir.Module) {
 	switch tl := t.(type) {
 	case Func:
@@ -360,7 +376,12 @@ func codegenToplevel(c *ctx, t TopLevel, m *ir.Module) {
 				params = append(params, ir.NewParam(string(param.Ident.Name), codegenType(c, param.Kind)))
 			}
 
-			fn := m.NewFunc(string(tl.Ident.Name), ret, params...)
+			fn := m.NewFunc(c.publicSymbolPrefix+string(tl.Ident.Name), ret, params...)
+			fn.Visibility = enum.VisibilityHidden
+			if unicode.IsUpper(firstRune(tl.Ident.Name)) {
+				fn.Visibility = enum.VisibilityDefault
+				c.ti.Functions[c.publicSymbolPrefix+string(tl.Ident.Name)] = tl.String()
+			}
 			c.top()[tl.Ident.Name] = LLVMValue{Value: fn}
 			return
 		}
@@ -368,7 +389,7 @@ func codegenToplevel(c *ctx, t TopLevel, m *ir.Module) {
 		fn := c.lookup(tl.Ident).(LLVMValue).Value.(*ir.Func)
 		bloc := fn.NewBlock("entry")
 
-		if tl.Ident.Name == "main" {
+		if tl.Ident.Name == "main" && !c.sets.isLibrary {
 			c.entry = fn
 		}
 
@@ -403,7 +424,13 @@ func codegenToplevel(c *ctx, t TopLevel, m *ir.Module) {
 	}
 }
 
-func codegen(tls []TopLevel) *ir.Module {
+type settings struct {
+	packageName     string
+	isLibrary       bool
+	forceimportlibs []string
+}
+
+func codegen(tls []TopLevel, sets settings) *ir.Module {
 	defer func() {
 		if v := recover(); v != nil {
 			if uerror, ok := v.(uerror); ok {
@@ -440,6 +467,13 @@ func codegen(tls []TopLevel) *ir.Module {
 			},
 		},
 		stringConstants: map[string]value.Value{},
+		sets:            sets,
+		ti: typeInfo{
+			Functions: map[string]string{},
+		},
+	}
+	if sets.isLibrary {
+		c.publicSymbolPrefix = sets.packageName + "/"
 	}
 
 	modu := ir.NewModule()
@@ -478,6 +512,24 @@ func codegen(tls []TopLevel) *ir.Module {
 		c.names[0][name] = LLVMValue{Value: value}
 	}
 
+	for _, lib := range sets.forceimportlibs {
+		ti, err := getTypeInfoFromFile(lib)
+		if err != nil {
+			log.Fatalf("error with type info: %s", err)
+		}
+
+		for name, kind := range ti.Functions {
+			p := NewParser(NewLexer(strings.NewReader(kind), lib))
+			t := p.parseType()
+			fnType := codegenType(c, t).(*types.FuncType)
+			params := []*ir.Param{}
+			for _, param := range fnType.Params {
+				params = append(params, ir.NewParam("", param))
+			}
+			c.names[0][name] = LLVMValue{Value: modu.NewFunc(name, fnType.RetType, params...)}
+		}
+	}
+
 	c.forwardDeclarationPass = true
 	for _, tl := range tls {
 		codegenToplevel(c, tl, modu)
@@ -488,6 +540,7 @@ func codegen(tls []TopLevel) *ir.Module {
 			codegenToplevel(c, tl, modu)
 		}
 	}
+	registerTypeInfoWithModule(c.ti, modu)
 
 	if c.entry != nil {
 		opening := modu.NewFunc("_tawa_main", types.Void)

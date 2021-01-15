@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/llir/llvm/ir"
 	"github.com/llir/llvm/ir/constant"
+	"github.com/llir/llvm/ir/enum"
 	"github.com/llir/llvm/ir/types"
 	"github.com/llir/llvm/ir/value"
 )
@@ -27,6 +28,7 @@ func addBuiltins(m *ir.Module) (ret map[string]value.Value) {
 
 func addPrint(m *ir.Module) (string, value.Value) {
 	fn := m.NewFunc("print", types.Void, ir.NewParam("input", StringPointer.Type))
+	fn.Visibility = enum.VisibilityHidden
 	entry := fn.NewBlock("entry")
 
 	len := getStructElm(entry, String.Type, fn.Params[0], 0)
