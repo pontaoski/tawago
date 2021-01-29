@@ -165,7 +165,7 @@ func main() {
 						os.Exit(0)
 					}
 
-					cmd := exec.Command("clang", "-nostdlib", "-o", out)
+					cmd := exec.Command("clang", "-nostdlib", "-lmimalloc", "-o", out)
 
 					for _, lib := range c.StringSlice("force-import") {
 						cmd.Args = append(cmd.Args, lib)
