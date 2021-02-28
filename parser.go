@@ -195,7 +195,7 @@ func (p *Parser) parseStructLiteral() (r map[string]Expression) {
 }
 
 func (p *Parser) parseExpressionLeaf() Expression {
-	tok, lit := p.l.LexExpecting(IDENT, IF, STRING, LBRACKET, INT, LET, VAR)
+	tok, lit := p.l.LexExpecting(IDENT, IF, STRING, LBRACKET, INT, LET, VAR, NEW, DELETE)
 
 	switch tok.Kind {
 	case LET:
@@ -277,6 +277,14 @@ func (p *Parser) parseExpressionLeaf() Expression {
 		}
 	case LBRACKET:
 		return p.parseBlock()
+	case NEW:
+		return Allocation{
+			PutOnHeap: p.parseExpression(),
+		}
+	case DELETE:
+		return Freeing{
+			RemoveFromHeap: p.parseExpression(),
+		}
 	}
 
 	panic("unhandled")

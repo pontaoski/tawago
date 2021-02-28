@@ -54,6 +54,12 @@ type Expression =
         Function  Identifier
         Arguments []Expression
     }`
+    | Allocation of `struct {
+        PutOnHeap Expression
+    }`
+    | Freeing of `struct {
+        RemoveFromHeap Expression
+    }`
     | Block of `[]Expression`
     | If of `struct {
         Condition Expression

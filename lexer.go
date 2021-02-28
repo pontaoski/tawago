@@ -40,6 +40,8 @@ const (
 	FUNC
 	STRUCT
 	IMPORT
+	NEW
+	DELETE
 )
 
 func (t TokenKind) String() string {
@@ -379,6 +381,8 @@ func (l *Lexer) Lex() (r Token, s string) {
 			"struct": STRUCT,
 			"var":    VAR,
 			"let":    LET,
+			"new":    NEW,
+			"delete": DELETE,
 		}
 
 		switch {

@@ -102,6 +102,18 @@ type Call struct {
 
 func (v Call) is_Expression() {}
 
+type Allocation struct {
+	PutOnHeap Expression
+}
+
+func (v Allocation) is_Expression() {}
+
+type Freeing struct {
+	RemoveFromHeap Expression
+}
+
+func (v Freeing) is_Expression() {}
+
 type Block []Expression
 
 func (v Block) is_Expression() {}

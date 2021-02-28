@@ -3,5 +3,7 @@ type Melako struct {
 }
 
 func main() {
-    let mu = new Melako
+    let mu = new Melako{
+
+    }
 }

@@ -64,6 +64,9 @@ type ctx struct {
 	sets                   settings
 	publicSymbolPrefix     string
 	ti                     typeInfo
+
+	malloc value.Value
+	free   value.Value
 }
 
 func (c *ctx) pushScope() {
@@ -320,10 +323,22 @@ func codegenExpression(c *ctx, e Expression, b *ir.Block) value.Value {
 		}
 
 		return b.NewGetElementPtr(strType, of, constant.NewInt(types.I32, int64(0)), constant.NewInt(types.I32, int64(field)))
+	case Allocation:
+		of := codegenExpression(c, expr.PutOnHeap, b)
+
+		p := b.NewGetElementPtr(of.Type(), constant.NewNull(types.NewPointer(of.Type())), constant.NewInt(types.I32, int64(1)))
+		size := b.NewPtrToInt(p, types.I32)
+
+		k := of.Type().(*types.PointerType)
+		ld := b.NewLoad(k.ElemType, of)
+
+		ptr := b.NewBitCast(b.NewCall(c.malloc, size), of.Type())
+		b.NewStore(ld, ptr)
+
+		return ptr
 	default:
 		panic("unhandled")
 	}
-
 }
 
 func codegenType(c *ctx, t Type) types.Type {
@@ -506,6 +521,10 @@ func codegen(tls []TopLevel, sets settings) *ir.Module {
 			}
 		}
 	}
+
+	// TODO: not assume 64bit size_t
+	c.malloc = modu.NewFunc("malloc", types.NewPointer(types.I8), ir.NewParam("size", types.I32))
+	c.free = modu.NewFunc("free", types.Void, ir.NewParam("ptr", types.NewPointer(types.I8)))
 
 	names := addBuiltins(modu)
 	for name, value := range names {
