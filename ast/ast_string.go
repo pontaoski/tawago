@@ -1,4 +1,4 @@
-package main
+package ast
 
 import "fmt"
 
@@ -21,4 +21,8 @@ func (f Func) String() string {
 		args = append(args, typeToString(&arg.Kind))
 	}
 	return fmt.Sprintf("func() %s;", typeToString(f.Returns))
+}
+
+type AST struct {
+	Toplevels []TopLevel
 }

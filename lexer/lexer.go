@@ -1,121 +1,25 @@
-package main
+package lexer
 
 import (
 	"bufio"
-	"fmt"
 	"io"
 	"unicode"
+
+	"github.com/pontaoski/tawago/errors"
+	"github.com/pontaoski/tawago/types"
 )
-
-type TokenKind int
-
-const (
-	EOF TokenKind = iota
-	ILLEGAL
-
-	COLON
-	LPAREN
-	RPAREN
-	LBRACKET
-	RBRACKET
-	COMMA
-	EQUALS
-	FATARROW
-	PERIOD
-
-	VAR
-	LET
-
-	EOS
-
-	INT
-
-	IDENT
-	STRING
-
-	TYPE
-	IF
-	THEN
-	ELSE
-	FUNC
-	STRUCT
-	IMPORT
-	NEW
-	DELETE
-)
-
-func (t TokenKind) String() string {
-	data := map[TokenKind]string{
-		EOF:      "EOF",
-		ILLEGAL:  "ILLEGAL",
-		COLON:    "COLON",
-		LPAREN:   "LPAREN",
-		RPAREN:   "RPAREN",
-		LBRACKET: "LBRACKET",
-		RBRACKET: "RBRACKET",
-		COMMA:    "COMMA",
-		EQUALS:   "EQUALS",
-		FATARROW: "FATARROW",
-		PERIOD:   "PERIOD",
-		VAR:      "VAR",
-		LET:      "LET",
-		EOS:      "EOS",
-		INT:      "INT",
-		IDENT:    "IDENT",
-		STRING:   "STRING",
-		TYPE:     "TYPE",
-		IF:       "IF",
-		THEN:     "THEN",
-		ELSE:     "ELSE",
-		FUNC:     "FUNC",
-		STRUCT:   "STRUCT",
-		IMPORT:   "IMPORT",
-	}
-	return data[t]
-}
-
-type Position struct {
-	Line     int
-	Column   int
-	Filename string
-}
-
-type Span struct {
-	From Position
-	To   Position
-}
-
-func (p Position) String() string {
-	if p.Filename == "" {
-		p.Filename = "<unknown>"
-	}
-	return fmt.Sprintf("%s:%d:%d", p.Filename, p.Line, p.Column)
-}
-
-func (s Span) String() string {
-	return fmt.Sprintf("%s-%d:%d", s.From, s.To.Line, s.To.Column)
-}
-
-func SingleCharSpan(p Position) Span {
-	return Span{p, p}
-}
 
 type Lexer struct {
-	pos           Position
+	pos           types.Position
 	reader        *bufio.Reader
-	peeked        *Token
+	peeked        *types.Token
 	peekedString  string
 	insertNewline bool
 }
 
-type Token struct {
-	Kind     TokenKind
-	Location Span
-}
-
 func NewLexer(reader io.Reader, filename string) *Lexer {
 	return &Lexer{
-		pos:    Position{Line: 1, Column: 0, Filename: filename},
+		pos:    types.Position{Line: 1, Column: 0, Filename: filename},
 		reader: bufio.NewReader(reader),
 	}
 }
@@ -139,9 +43,9 @@ func (l *Lexer) backupN(n int) {
 	}
 }
 
-func (l *Lexer) kinded(t TokenKind) Token {
-	return Token{
-		Location: SingleCharSpan(l.pos),
+func (l *Lexer) kinded(t types.TokenKind) types.Token {
+	return types.Token{
+		Location: types.SingleCharSpan(l.pos),
 		Kind:     t,
 	}
 }
@@ -154,10 +58,10 @@ func otherChar(r rune) bool {
 	return r == '/' || firstChar(r) || unicode.IsDigit(r)
 }
 
-func (l *Lexer) lexIdent() (Position, Position, string) {
+func (l *Lexer) lexIdent() (types.Position, types.Position, string) {
 	var lit string
-	var from Position
-	var to Position
+	var from types.Position
+	var to types.Position
 
 	r, _, err := l.reader.ReadRune()
 	l.pos.Column++
@@ -185,10 +89,10 @@ func (l *Lexer) lexIdent() (Position, Position, string) {
 	}
 }
 
-func (l *Lexer) lexString() (Position, Position, string) {
+func (l *Lexer) lexString() (types.Position, types.Position, string) {
 	var lit string
-	var from Position
-	var to Position
+	var from types.Position
+	var to types.Position
 	seenOpen := false
 
 	r, _, err := l.reader.ReadRune()
@@ -220,7 +124,7 @@ func (l *Lexer) lexString() (Position, Position, string) {
 	}
 }
 
-func (l *Lexer) Peek() (Token, string) {
+func (l *Lexer) Peek() (types.Token, string) {
 	if l.peeked != nil {
 		return *l.peeked, l.peekedString
 	}
@@ -232,7 +136,7 @@ func (l *Lexer) Peek() (Token, string) {
 	return tok, str
 }
 
-func (l *Lexer) PeekIs(k ...TokenKind) bool {
+func (l *Lexer) PeekIs(k ...types.TokenKind) bool {
 	token, _ := l.Peek()
 	for _, kind := range k {
 		if token.Kind == kind {
@@ -243,7 +147,7 @@ func (l *Lexer) PeekIs(k ...TokenKind) bool {
 	return false
 }
 
-func (l *Lexer) PeekIsWithRet(k ...TokenKind) (bool, Token, string) {
+func (l *Lexer) PeekIsWithRet(k ...types.TokenKind) (bool, types.Token, string) {
 	token, lit := l.Peek()
 	for _, kind := range k {
 		if token.Kind == kind {
@@ -251,10 +155,10 @@ func (l *Lexer) PeekIsWithRet(k ...TokenKind) (bool, Token, string) {
 		}
 	}
 
-	return false, Token{}, ""
+	return false, types.Token{}, ""
 }
 
-func (l *Lexer) LexWithI(i int, kinds ...TokenKind) (t Token, s string) {
+func (l *Lexer) LexWithI(i int, kinds ...types.TokenKind) (t types.Token, s string) {
 	for idx, kind := range kinds {
 		tok, lit := l.LexExpecting(kind)
 		if idx == i {
@@ -266,7 +170,7 @@ func (l *Lexer) LexWithI(i int, kinds ...TokenKind) (t Token, s string) {
 	return
 }
 
-func (l *Lexer) LexExpecting(k ...TokenKind) (Token, string) {
+func (l *Lexer) LexExpecting(k ...types.TokenKind) (types.Token, string) {
 	token, lit := l.Lex()
 	for _, kind := range k {
 		if token.Kind == kind {
@@ -274,23 +178,23 @@ func (l *Lexer) LexExpecting(k ...TokenKind) (Token, string) {
 		}
 	}
 
-	panic(ExpectedOneOfKindGotKind{
+	panic(errors.ExpectedOneOfKindGotKind{
 		Expected: k,
 		Got:      token.Kind,
 		Location: token.Location,
 	})
 }
 
-func (l *Lexer) Lex() (r Token, s string) {
+func (l *Lexer) Lex() (r types.Token, s string) {
 	if l.peeked != nil {
 		defer func() { l.peeked = nil }()
 		return *l.peeked, l.peekedString
 	}
 	if l.insertNewline {
 		l.insertNewline = false
-		return Token{
-			Kind:     EOS,
-			Location: SingleCharSpan(l.pos),
+		return types.Token{
+			Kind:     types.EOS,
+			Location: types.SingleCharSpan(l.pos),
 		}, "\n"
 	}
 
@@ -305,7 +209,7 @@ func (l *Lexer) Lex() (r Token, s string) {
 
 		if byt[0] == '\n' {
 			switch r.Kind {
-			case IDENT, RBRACKET, RPAREN, INT, STRING:
+			case types.IDENT, types.RBRACKET, types.RPAREN, types.INT, types.STRING:
 				_, err = l.reader.ReadByte()
 				if err != nil {
 					panic(err)
@@ -322,7 +226,7 @@ func (l *Lexer) Lex() (r Token, s string) {
 		r, _, err := l.reader.ReadRune()
 		if err != nil {
 			if err == io.EOF {
-				return l.kinded(EOF), ""
+				return l.kinded(types.EOF), ""
 			}
 			panic(err)
 		}
@@ -340,20 +244,20 @@ func (l *Lexer) Lex() (r Token, s string) {
 				if _, _, err := l.reader.ReadRune(); err != nil {
 					panic(err)
 				}
-				return l.kinded(FATARROW), "=>"
+				return l.kinded(types.FATARROW), "=>"
 			}
-			return l.kinded(EQUALS), "="
+			return l.kinded(types.EQUALS), "="
 		}
 
-		data := map[rune]TokenKind{
-			':': COLON,
-			'(': LPAREN,
-			')': RPAREN,
-			'{': LBRACKET,
-			'}': RBRACKET,
-			',': COMMA,
-			';': EOS,
-			'.': PERIOD,
+		data := map[rune]types.TokenKind{
+			':': types.COLON,
+			'(': types.LPAREN,
+			')': types.RPAREN,
+			'{': types.LBRACKET,
+			'}': types.RBRACKET,
+			',': types.COMMA,
+			';': types.EOS,
+			'.': types.PERIOD,
 		}
 
 		if kind, ok := data[r]; ok {
@@ -368,21 +272,21 @@ func (l *Lexer) Lex() (r Token, s string) {
 			l.backup()
 			from, to, lit := l.lexString()
 
-			return Token{STRING, Span{from, to}}, lit
+			return types.Token{types.STRING, types.Span{from, to}}, lit
 		}
 
-		keywords := map[string]TokenKind{
-			"type":   TYPE,
-			"if":     IF,
-			"then":   THEN,
-			"else":   ELSE,
-			"func":   FUNC,
-			"import": IMPORT,
-			"struct": STRUCT,
-			"var":    VAR,
-			"let":    LET,
-			"new":    NEW,
-			"delete": DELETE,
+		keywords := map[string]types.TokenKind{
+			"type":   types.TYPE,
+			"if":     types.IF,
+			"then":   types.THEN,
+			"else":   types.ELSE,
+			"func":   types.FUNC,
+			"import": types.IMPORT,
+			"struct": types.STRUCT,
+			"var":    types.VAR,
+			"let":    types.LET,
+			"new":    types.NEW,
+			"delete": types.DELETE,
 		}
 
 		switch {
@@ -393,14 +297,14 @@ func (l *Lexer) Lex() (r Token, s string) {
 				r, _, err := l.reader.ReadRune()
 				if err != nil {
 					if err == io.EOF {
-						return l.kinded(INT), runes
+						return l.kinded(types.INT), runes
 					}
 					panic(err)
 				}
 
 				if !unicode.IsDigit(r) {
 					l.backup()
-					return l.kinded(INT), runes
+					return l.kinded(types.INT), runes
 				}
 
 				runes += string(r)
@@ -412,10 +316,10 @@ func (l *Lexer) Lex() (r Token, s string) {
 			from, to, lit := l.lexIdent()
 
 			if kind, ok := keywords[lit]; ok {
-				return Token{kind, Span{from, to}}, lit
+				return types.Token{kind, types.Span{from, to}}, lit
 			}
 
-			return Token{IDENT, Span{from, to}}, lit
+			return types.Token{types.IDENT, types.Span{from, to}}, lit
 		}
 
 		panic("unhandled")
@@ -423,13 +327,13 @@ func (l *Lexer) Lex() (r Token, s string) {
 }
 
 type testToken struct {
-	t Token
+	t types.Token
 	s string
 }
 
 func (l *Lexer) lexToEOF() (ret []testToken) {
 	t, s := l.Lex()
-	for t.Kind != EOF {
+	for t.Kind != types.EOF {
 		ret = append(ret, testToken{
 			t: t,
 			s: s,

@@ -1,9 +1,11 @@
-package main
+package ast
+
+import "github.com/pontaoski/tawago/types"
 
 type Kind int64
 type Identifier struct {
 	Name string
-	Pos  Span
+	Pos  types.Span
 }
 type Type interface {
 	is_Type()
@@ -81,7 +83,7 @@ func (v MutDeclaration) is_Expression() {}
 type Assignment struct {
 	To    Identifier
 	Value Expression
-	Pos   Span
+	Pos   types.Span
 }
 
 func (v Assignment) is_Expression() {}
@@ -90,7 +92,7 @@ type FieldAssignment struct {
 	Struct Expression
 	Field  Identifier
 	Value  Expression
-	Pos    Span
+	Pos    types.Span
 }
 
 func (v FieldAssignment) is_Expression() {}

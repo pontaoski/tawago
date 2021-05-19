@@ -2,7 +2,7 @@ type Kind = int64;
 
 type Identifier = `struct {
     Name string
-    Pos  Span
+    Pos  types.Span
 }`;
 
 type Type =
@@ -42,13 +42,13 @@ type Expression =
     | Assignment of `struct {
         To    Identifier
         Value Expression
-        Pos   Span
+        Pos   types.Span
     }`
     | FieldAssignment of `struct {
         Struct Expression
         Field  Identifier
         Value  Expression
-        Pos    Span
+        Pos    types.Span
     }`
     | Call of `struct {
         Function  Identifier

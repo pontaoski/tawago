@@ -3,17 +3,32 @@ package main
 import (
 	"strconv"
 
+	"github.com/pontaoski/tawago/ast"
+	"github.com/pontaoski/tawago/lexer"
+	"github.com/pontaoski/tawago/types"
 	"github.com/ztrue/tracerr"
 )
 
 type Parser struct {
-	l   *Lexer
-	ast AST
+	l   *lexer.Lexer
+	ast ast.AST
 }
 
-func NewParser(l *Lexer) Parser {
-	a := AST{}
+func NewParser(l *lexer.Lexer) Parser {
+	a := ast.AST{}
 	return Parser{l, a}
+}
+
+// ParseImport ( "import" str )
+func ParseImport(l *lexer.Lexer) ast.Import {
+	l.LexExpecting(types.IMPORT)
+	_, s := l.LexExpecting(types.STRING)
+	return ast.Import(s)
+}
+
+// ParseType ( "type" str ... )
+func ParseType(l *lexer.Lexer) ast.TypeDeclaration {
+
 }
 
 func (p *Parser) Parse() (err error) {
@@ -28,9 +43,9 @@ func (p *Parser) Parse() (err error) {
 		}
 	}()
 	for {
-		tok, _ := p.l.Lex()
+		tok, _ := p.l.Peek()
 
-		if tok.Kind == EOF {
+		if tok.Kind == types.EOF {
 			return
 		}
 
@@ -107,10 +122,6 @@ func (p *Parser) Parse() (err error) {
 			p.l.LexExpecting(EOS)
 		}
 	}
-}
-
-type AST struct {
-	Toplevels []TopLevel
 }
 
 func (p *Parser) parseImport() {
